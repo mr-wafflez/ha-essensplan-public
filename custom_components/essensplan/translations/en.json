@@ -1,0 +1,24 @@
+{
+  "title": "Meal Planner",
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure meal planner",
+        "description": "Choose 1 to 6 dishes per day, each with its own servings. Reducing the count keeps existing meals. Optionally sync ingredients and check marks both ways with a writable Home Assistant to-do list. Turning sync off keeps the selected target and existing items. Pair the target list with Apple Reminders in the iPhone Companion app.",
+        "data": {"meals_per_day": "Dishes per day", "sync_enabled": "Sync shopping list", "sync_target": "Target shopping list"}
+      }
+    },
+    "error": {"invalid_meals_per_day": "Choose a whole number from 1 to 6.", "missing_target": "Select a target shopping list to enable sync.", "unsupported_target": "Select another to-do list that supports adding, updating and deleting items. The generated Meal Planner list cannot be used as its own target."}
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up meal planner",
+        "description": "Local recipes, weekly meal planning and a shopping list for your household. The interface is set up automatically. An existing meal planner dashboard is kept. No cloud account required."
+      }
+    },
+    "abort": {
+      "already_configured": "The meal planner is already configured."
+    }
+  }
+}

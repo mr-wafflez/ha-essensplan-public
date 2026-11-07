@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 1200" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="base" x2=".85" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#654d45"/><stop offset=".52" stop-color="#44352e"/><stop offset="1" stop-color="#35483f"/></linearGradient>
+    <radialGradient id="peach"><stop stop-color="#bf8768" stop-opacity=".74"/><stop offset="1" stop-color="#bf8768" stop-opacity="0"/></radialGradient>
+    <radialGradient id="sage"><stop stop-color="#829177" stop-opacity=".68"/><stop offset="1" stop-color="#829177" stop-opacity="0"/></radialGradient>
+  </defs>
+  <path fill="url(#base)" d="M0 0h960v1200H0z"/>
+  <ellipse cx="75" cy="90" rx="650" ry="670" fill="url(#peach)"/>
+  <ellipse cx="852" cy="1080" rx="670" ry="620" fill="url(#sage)"/>
+  <path d="M960 0H508C703 113 672 262 960 376Z" fill="#ecc499" opacity=".15"/>
+  <path d="M0 1036c170-115 316-84 503 164H0Z" fill="#e5ad82" opacity=".14"/>
+  <g fill="none" stroke="#efcba4" stroke-width="2" opacity=".28" stroke-linejoin="round">
+    <path d="M742 1138c71-122 102-205 84-337m5 112c-47-18-76-48-81-92 44 16 68 47 81 92Zm-12 66c49-9 84-37 94-78-45 8-80 37-94 78Zm-25 65c-44-13-75-45-79-90 40 19 66 48 79 90Zm32-211c36-30 47-69 31-105-32 32-37 70-31 105Z"/>
+  </g>
+</svg>

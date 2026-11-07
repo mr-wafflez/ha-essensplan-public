@@ -1,0 +1,10 @@
+sync_shopping_list:
+  name: Einkaufsliste synchronisieren
+  description: Startet den Abgleich mit der in Essensplan ausgewählten Ziel-Einkaufsliste, wenn Einkaufsliste synchronisieren eingeschaltet ist.
+  fields:
+    retry_unconfirmed:
+      name: Unbestätigte Übertragung erneut senden
+      description: Nur einschalten, wenn die Zielliste geprüft wurde und der fehlende Eintrag dort wirklich nicht vorhanden ist. Bei einer verzögerten Zielliste können sonst doppelte Einträge entstehen.
+      default: false
+      selector:
+        boolean:

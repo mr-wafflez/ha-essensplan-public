@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Essensplan – Bildupload prüfen</title>
+<style>body{font-family:Arial,sans-serif;margin:0;background:#151b22;color:#f1f4f8;--primary-text-color:#f1f4f8;--secondary-text-color:#bdc8d4;--card-background-color:#25303c;--secondary-background-color:#1b2530;--primary-color:#54a7f3;--text-primary-color:#101820;--divider-color:#536170}main{max-width:760px;margin:20px auto;padding:12px}ha-card{display:block;border-radius:18px;background:#202a35}h1{font-size:18px}#test-state{font-size:12px;color:#bdc8d4}</style>
+<main><h1>Essensplan · Rezeptbild</h1><div id="test-state">Lokale Funktionsprüfung · 0 Uploads</div>
+<p><button id="fixture-image">Testbild auswählen</button> <button id="fixture-refresh">Hintergrundabruf</button> <label><input type="checkbox" id="fixture-error"> Uploadfehler simulieren</label></p>
+<essensplan-card></essensplan-card></main>
+<script src="../custom_components/essensplan/frontend/essensplan-card.js"></script>
+<script>
+  const original={today:'2026-10-16',revision:0,completed:[],shopping_week:'2026-10-12',shopping:[],plan:{},
+    recipes:{r1:{id:'r1',name:'Vorhandenes Rezept',servings:'4',image:'',ingredients:[{quantity:'500',unit:'g',name:'Kartoffeln'}],steps:['Kartoffeln garen.']}}};
+  let state=structuredClone(original),uploads=[],calls=[];
+  window.uploadFails=false;
+  const clone=()=>structuredClone(state);
+  const hass={states:{},fetchWithAuth:async(url,options)=>{
+    if(window.uploadFails)return {ok:false,status:500};
+    const blob=options.body.get('file');
+    const id=(uploads.length+1).toString(16).padStart(32,'0');
+    uploads.push({url,id,size:blob.size,type:blob.type});
+    document.querySelector('#test-state').textContent=`${uploads.length} Uploads · ${blob.size} Bytes · ${blob.type}`;
+    return {ok:true,status:200,json:async()=>({id})};
+  },callWS:async msg=>{
+    calls.push(msg);
+    if(msg.type==='essensplan/change'){
+      if(msg.revision!==state.revision)throw Error('Daten wurden inzwischen geändert.');
+      if(msg.operation==='save_recipe')state.recipes[msg.payload.id||'new']={...msg.payload,id:msg.payload.id||'new'};
+      state.revision++;
+    }
+    return clone();
+  }};
+  const card=document.querySelector('essensplan-card');
+  card.setConfig({mode:'recipes'});card.hass=hass;
+  document.querySelector('#fixture-error').onchange=event=>{window.uploadFails=event.target.checked;};
+  document.querySelector('#fixture-refresh').onclick=()=>card.load();
+  document.querySelector('#fixture-image').onclick=()=>{
+    const field=card.shadowRoot.querySelector('#image-file');
+    if(!field)return;
+    const canvas=document.createElement('canvas');canvas.width=3000;canvas.height=2000;
+    const c=canvas.getContext('2d');c.fillStyle='#e9dec4';c.fillRect(0,0,3000,2000);
+    c.fillStyle='#fffdf8';c.beginPath();c.arc(1500,1000,800,0,Math.PI*2);c.fill();
+    c.fillStyle='#c09144';c.beginPath();c.arc(1500,1000,620,0,Math.PI*2);c.fill();
+    c.fillStyle='#4a733c';c.beginPath();c.arc(1450,950,100,0,Math.PI*2);c.fill();
+    canvas.toBlob(blob=>{
+      const transfer=new DataTransfer();transfer.items.add(new File([blob],'testgericht.jpg',{type:'image/jpeg'}));
+      field.files=transfer.files;field.dispatchEvent(new Event('change',{bubbles:true}));
+    },'image/jpeg',0.9);
+  };
+</script></html>

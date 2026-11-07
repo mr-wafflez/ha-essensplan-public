@@ -1,0 +1,50 @@
+# Optionales eigenes Dashboard, URL: /essensplan-plan
+# Unter Einstellungen → Dashboards ein leeres Dashboard mit URL „essensplan-plan“
+# erstellen und diesen Inhalt in dessen Rohkonfigurationseditor einsetzen.
+title: Essensplan
+background:
+  image: /essensplan_static/dashboard-background.svg?v=0.6.3
+  opacity: 100
+  size: cover
+views:
+  - title: Heute
+    path: heute
+    icon: mdi:food-fork-drink
+    cards:
+      - type: custom:essensplan-card
+        mode: today
+        title: Heute auf dem Tisch
+        view_paths: &essensplan_tabs
+          today: /essensplan-plan/heute
+          week: /essensplan-plan/woche
+          detail: /essensplan-plan/rezept
+          recipes: /essensplan-plan/rezepte
+          shopping: /essensplan-plan/einkauf
+  - title: Wochenplan
+    path: woche
+    icon: mdi:calendar-week
+    cards:
+      - type: custom:essensplan-card
+        mode: week
+        view_paths: *essensplan_tabs
+  - title: Rezept
+    path: rezept
+    subview: true
+    cards:
+      - type: custom:essensplan-card
+        mode: detail
+        view_paths: *essensplan_tabs
+  - title: Rezepte
+    path: rezepte
+    icon: mdi:book-open-variant
+    cards:
+      - type: custom:essensplan-card
+        mode: recipes
+        view_paths: *essensplan_tabs
+  - title: Einkauf
+    path: einkauf
+    icon: mdi:cart
+    cards:
+      - type: custom:essensplan-card
+        mode: shopping
+        view_paths: *essensplan_tabs

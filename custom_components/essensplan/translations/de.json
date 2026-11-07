@@ -1,0 +1,24 @@
+{
+  "title": "Essensplan",
+  "options": {
+    "step": {
+      "init": {
+        "title": "Essensplan konfigurieren",
+        "description": "Wähle 1 bis 6 Gerichte pro Tag, jeweils mit eigenen Portionen. Bereits geplante Gerichte bleiben beim Verringern der Anzahl erhalten. Optional kannst du die Zutaten mit einer beschreibbaren HA-To-do-Liste synchronisieren und Häkchen in beide Richtungen abgleichen. Beim Ausschalten bleiben Zielliste und Einträge erhalten. Die Zielliste lässt sich in der iPhone-Companion-App mit Apple Erinnerungen koppeln.",
+        "data": {"meals_per_day": "Gerichte pro Tag", "sync_enabled": "Einkaufsliste synchronisieren", "sync_target": "Ziel-Einkaufsliste"}
+      }
+    },
+    "error": {"invalid_meals_per_day": "Wähle eine ganze Zahl von 1 bis 6.", "missing_target": "Wähle eine Ziel-Einkaufsliste, um die Synchronisation einzuschalten.", "unsupported_target": "Wähle eine andere To-do-Liste, die Hinzufügen, Ändern und Entfernen unterstützt. Die generierte Essensplan-Liste kann nicht ihr eigenes Ziel sein."}
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "Essensplan einrichten",
+        "description": "Lokale Rezepte, Wochenplan und Einkaufsliste für deinen Haushalt. Die Oberfläche wird automatisch eingerichtet. Ein vorhandenes Essensplan-Dashboard wird weiterverwendet. Es ist kein Cloud-Konto nötig."
+      }
+    },
+    "abort": {
+      "already_configured": "Der Essensplan ist bereits eingerichtet."
+    }
+  }
+}
