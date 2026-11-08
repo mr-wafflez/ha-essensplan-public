@@ -1,4 +1,4 @@
-/* Essensplan 0.7.2 – bundled with the integration; no CDN or build step. */
+/* Essensplan 0.8.0 – bundled with the integration; no CDN or build step. */
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const localDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 function offsetDay(stamp, n) { const d = new Date(`${stamp}T12:00:00`); d.setDate(d.getDate()+n); return localDate(d); }
@@ -84,6 +84,7 @@ class EssensplanCard extends HTMLElement {
   disconnectedCallback() {
     clearInterval(this._interval); clearTimeout(this._hold);
     this.clearImagePreview();
+    this.clearOcrPreview();
     window.removeEventListener('popstate', this._urlChanged);
     window.removeEventListener('location-changed', this._urlChanged);
   }
@@ -152,6 +153,7 @@ class EssensplanCard extends HTMLElement {
   render() {
     if (!this.config) return;
     this.clearImagePreview();
+    this.clearOcrPreview();
     const mode = this._mode || this.config.mode;
     const d = this.data;
     let body = '';
@@ -188,6 +190,9 @@ class EssensplanCard extends HTMLElement {
       .recipe-media{position:relative;aspect-ratio:4/3;background:#e5ab75;overflow:hidden}.recipe-media img{width:100%;height:100%;object-fit:cover;display:block}
       .recipe-info{padding:12px 14px;overflow-wrap:anywhere}.recipe-info h3{margin:0 0 5px}.recipe-info .actions{margin-top:10px}
       .bubbles{position:absolute;right:12px;bottom:12px;display:flex;gap:8px}.bubble{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;padding:0;background:var(--card-background-color,#fff);box-shadow:0 2px 8px #0005}.bubble svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8}
+      .ocr-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;align-items:start}
+      .ocr-columns img{display:block;max-width:100%;max-height:380px;object-fit:contain;border-radius:8px}.ocr-columns textarea{min-height:220px}
+      .picker-list{display:grid;gap:8px;margin:12px 0}.picker-list button{text-align:left}
       dialog{box-sizing:border-box;width:min(560px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;border:1px solid var(--divider-color,#8885);border-radius:18px;padding:16px;color:var(--primary-text-color,#222);background:var(--card-background-color,#fff)}dialog::backdrop{background:#0008}dialog select{width:100%}.detail-cover{margin-bottom:12px}
       .image-preview{display:block;width:100%;max-height:220px;object-fit:contain;border-radius:12px;margin:10px 0;background:var(--secondary-background-color,#8881)}[hidden]{display:none!important}
       :host{
@@ -202,7 +207,7 @@ class EssensplanCard extends HTMLElement {
       ha-card{
         color:var(--ep-text);border-radius:26px;border:1px solid var(--ep-edge);
         background:var(--ep-surface);
-        background-image:url("/essensplan_static/kitchen-background.svg?v=0.7.2"),
+        background-image:url("/essensplan_static/kitchen-background.svg?v=0.8.0"),
           radial-gradient(ellipse at top left,#d9a47524,transparent 68%);
         background-size:min(100%,640px) auto,100% 360px;
         background-position:top right,top left;background-repeat:no-repeat;
@@ -230,7 +235,7 @@ class EssensplanCard extends HTMLElement {
       dialog{box-shadow:0 16px 54px #0005,inset 0 1px 0 var(--ep-glint)}
       @supports (color:color-mix(in srgb,white,black)){
         ha-card{
-          background-image:url("/essensplan_static/kitchen-background.svg?v=0.7.2"),
+          background-image:url("/essensplan_static/kitchen-background.svg?v=0.8.0"),
             radial-gradient(ellipse at 2% 0%,color-mix(in srgb,#e6ad7d 20%,transparent),transparent 63%),
             radial-gradient(ellipse at 96% 16%,color-mix(in srgb,#9baa7f 18%,transparent),transparent 65%),
             radial-gradient(ellipse at 5% 100%,color-mix(in srgb,var(--ep-accent) 12%,transparent),transparent 66%);
@@ -276,9 +281,61 @@ class EssensplanCard extends HTMLElement {
       return `<button class="tile" id="${slot ? `today-${slot}` : 'today'}" data-today-slot="${slot}" aria-label="Gericht ${slot+1}: ${esc(recipe?.name || 'Heute noch nichts geplant')}. Tippen für Rezept, gedrückt halten für Wochenplan.">
       ${recipe?.image ? `<img class="hero" alt="" src="${esc(recipe.image)}">` : '<span class="emoji" aria-hidden="true">🍽️</span>'}
       <small>${esc(this.config.title || 'Heute auf dem Tisch')} · ${esc(labelDate(stamp))}${count>1?` · Gericht ${slot+1}`:''}</small>
-      <strong>${esc(recipe?.name || 'Noch nichts geplant')}</strong><small>${meal ? `${esc(meal.servings)} Portionen${meal.prepared_from?' · vorbereitet':''} · Rezept öffnen` : 'Im Wochenplan ein Gericht auswählen'}</small></button>`;
+      <strong>${esc(recipe?.name || 'Noch nichts geplant')}</strong><small>${meal ? `${esc(meal.servings)} Portionen${meal.prepared_from?' · '+esc(this.prepLabel(meal.prepared_from)):''} · Rezept öffnen` : 'Im Wochenplan ein Gericht auswählen'}</small></button>`;
     }).join('')}</div>
       <div class="actions spacer"><button data-act="week">Wochenplan</button><button data-mode="recipes">Rezepte</button><button data-mode="shopping">Einkauf</button></div>`;
+  }
+
+  prepLabel(source) {
+    const cooked=this.mealsFor(source.date)[source.slot]?.cooked;
+    return (cooked?'Vorbereitet am ':'Geplante Reste · Kochtag ')+labelDate(source.date);
+  }
+  sparePortions(date,slot,meal) {
+    let spare=Number(meal.cook_servings)-Number(meal.servings);
+    for (const stamp of Object.keys(this.data.plan)) for (const item of this.mealsFor(stamp)) {
+      if (item?.prepared_from?.date===date && item.prepared_from.slot===slot) spare-=Number(item.servings);
+    }
+    return Number(spare.toFixed(3));
+  }
+  openRecipePicker(date,slot,trigger) {
+    const revision=this.data.revision;
+    const recent=new Map();
+    for (const stamp of Object.keys(this.data.plan).sort()) for (const meal of this.mealsFor(stamp)) {
+      if (meal?.cooked) recent.set(meal.recipe_id,stamp);
+    }
+    const dialog=document.createElement('dialog');
+    dialog.setAttribute('aria-labelledby','picker-title');
+    dialog.innerHTML=`<h2 id="picker-title">Rezept auswählen</h2><p>${esc(labelDate(date))} · Gericht ${slot+1}</p>
+      <label>Rezepte oder Zutaten suchen<input type="search" autofocus></label>
+      <label>Rezeptauswahl<select><option value="">Alle Rezepte</option><option value="favorites">Favoriten</option>
+      <option value="recent">Zuletzt gekocht</option></select></label>
+      <div class="picker-list" aria-live="polite"></div><button type="button" data-close>Abbrechen</button>`;
+    const search=dialog.querySelector('input'), filter=dialog.querySelector('select'), list=dialog.querySelector('.picker-list');
+    const recipes=Object.values(this.data.recipes);
+    const update=()=>{
+      const words=search.value.toLocaleLowerCase('de').trim().split(/\s+/);
+      const matches=recipes.filter(r=>(filter.value!=='favorites'||r.favorite) &&
+        (filter.value!=='recent'||recent.has(r.id)) &&
+        words.every(word=>[r.name,...r.ingredients.map(i=>i.name)].join(' ').toLocaleLowerCase('de').includes(word)));
+      matches.sort((a,b)=>(filter.value==='recent'?recent.get(b.id).localeCompare(recent.get(a.id)):0)||a.name.localeCompare(b.name,'de'));
+      list.innerHTML=matches.length?matches.map(r=>`<button type="button" data-pick="${esc(r.id)}">${esc(r.name)}</button>`).join(''):
+        '<p>Keine passenden Rezepte.</p>';
+    };
+    search.oninput=filter.onchange=update;
+    list.onclick=event=>{
+      const id=event.target.closest('[data-pick]')?.dataset.pick;
+      if (!id) return;
+      if (this.data.revision!==revision || this.mealsFor(date)[slot] || this._mealDrafts?.[`${date}/${slot}`]) {
+        list.textContent='Der Platz wurde geändert. Öffne die Rezeptwahl erneut.';
+        return;
+      }
+      this.openRecipeDialog(id,trigger,true,{date,slot});
+    };
+    dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+    dialog.addEventListener('close',()=>{dialog.remove();trigger.focus();});
+    this.shadowRoot.append(dialog);
+    update();
+    dialog.showModal();
   }
   weekHTML() {
     const recipes = Object.values(this.data.recipes).sort((a,b)=>a.name.localeCompare(b.name,'de'));
@@ -286,10 +343,13 @@ class EssensplanCard extends HTMLElement {
       <p class="muted">${esc(labelDate(this.week))} – ${esc(labelDate(offsetDay(this.week,6)))}</p>
       ${!recipes.length ? '<p>Lege zuerst unter „Rezepte“ dein erstes Gericht an.</p>' : ''}
       ${Array.from({length:7},(_,i)=>{const stamp=offsetDay(this.week,i),count=this.slotCount(stamp); return `<section class="day ${stamp===this.data.today?'today':''}" data-date="${stamp}"><strong>${esc(labelDate(stamp))}</strong>
-      ${Array.from({length:count},(_,slot)=>{const {meal,recipe}=this.recipeFor(stamp,slot),draft=this._mealDrafts?.[`${stamp}/${slot}`],value=draft || meal;return `<form data-meal-slot="${slot}" data-revision="${draft?.revision ?? this.data.revision}">
+      ${Array.from({length:count},(_,slot)=>{const {meal,recipe}=this.recipeFor(stamp,slot),draft=this._mealDrafts?.[`${stamp}/${slot}`],value=draft || meal, spare=meal?.cook_servings ? this.sparePortions(stamp,slot,meal) : 0;return `<form data-meal-slot="${slot}" data-revision="${draft?.revision ?? this.data.revision}">
       ${count>1?`<span class="muted">Gericht ${slot+1}</span>`:''}<div class="row"><select aria-label="Gericht ${slot+1} am ${stamp}"><option value="">Noch offen</option>${recipes.map(r=>`<option value="${r.id}" ${value?.recipe_id===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select>
       <input type="number" min="0.1" max="100" step="0.1" required value="${esc(value?.servings || 4)}" aria-label="Portionen für Gericht ${slot+1} am ${stamp}"><button type="submit" class="primary">Speichern</button>${recipe?`<button type="button" data-detail="${stamp}" data-slot="${slot}">Rezept</button><button type="button" data-meal-prep="${stamp}" data-slot="${slot}">Mealprep</button>`:''}</div>
-      ${meal?.prepared_from?`<small>Vorbereitet am ${esc(labelDate(meal.prepared_from.date))}</small>`:meal?.cook_servings?`<small>${esc(meal.cook_servings)} Portionen kochen</small>`:''}</form>`;}).join('')}</section>`;}).join('')}
+      ${!value && recipes.length?`<button type="button" data-pick-slot="${stamp}" data-slot="${slot}">Rezept auswählen</button>`:''}
+      ${meal && !meal.prepared_from && stamp<=this.data.today?`<button type="button" data-cooked="${stamp}" data-slot="${slot}" aria-pressed="${Boolean(meal.cooked)}">${meal.cooked?'✓ Gekocht · Rückgängig':'Als gekocht markieren'}</button>`:''}
+      ${spare>0?`<small>${pretty(spare)} Portionen noch nicht verplant</small><button type="button" data-meal-prep="${stamp}" data-slot="${slot}" data-leftover>Reste einplanen</button>`:''}
+      ${meal?.prepared_from?`<small>${esc(this.prepLabel(meal.prepared_from))}</small>`:meal?.cook_servings?`<small>${esc(meal.cook_servings)} Portionen ${meal.cooked?'gekocht':'zum Kochen geplant'}</small>`:''}</form>`;}).join('')}</section>`;}).join('')}
       <p class="hint">Beim Speichern wird die Einkaufsliste automatisch auf diese Woche umgestellt. „Noch offen“ + Speichern entfernt ein Gericht.</p>
       <p class="hint">Gerichte pro Tag: ${this.data.meals_per_day || 1}. Änderbar unter Einstellungen → Geräte & Dienste → Essensplan → Konfigurieren (1–6). Bereits belegte zusätzliche Plätze bleiben erhalten.</p>
       <div class="actions"><button data-act="shopping-week">Einkaufsliste für diese Woche anzeigen</button><button data-act="reload-plan">Plan neu laden und ungespeicherte Änderungen verwerfen</button></div>`;
@@ -304,7 +364,7 @@ class EssensplanCard extends HTMLElement {
     const servings = direct ? Number(r.servings) : Number(meal.servings);
     const factor = Number(meal?.cook_servings || servings)/Number(r.servings);
     return `${r.image?`<img class="hero" src="${esc(r.image)}" alt="${esc(r.name)}">`:''}<h2>${esc(r.name)}</h2><p class="muted">${pretty(servings)} Portionen${direct?'':` · ${esc(labelDate(stamp))}${this.slotCount(stamp)>1?` · Gericht ${slot+1}`:''}`}</p>
-      ${meal?.prepared_from?`<p>Vorbereitet am ${esc(labelDate(meal.prepared_from.date))}.</p>`:meal?.cook_servings?`<p>Zutaten für insgesamt ${esc(meal.cook_servings)} Kochportionen.</p>`:''}
+      ${meal?.prepared_from?`<p>${esc(this.prepLabel(meal.prepared_from))}.</p>`:meal?.cook_servings?`<p>Zutaten für insgesamt ${esc(meal.cook_servings)} Kochportionen.</p>`:''}
       <h3>Zutaten</h3><ul>${(r.ingredients.length ? r.ingredients.map(i=>`<li>${i.quantity == null ? esc(i.name) : `${pretty(Number(i.quantity)*factor)} ${esc(i.unit)} ${esc(i.name)}`}</li>`).join('') : '<li>Keine Zutaten eingetragen</li>')}</ul>
       <h3>Zubereitung</h3>${r.steps.length ? '' : '<p>Keine Zubereitung eingetragen.</p>'}<ol>${r.steps.map(s=>`<li>${esc(s).replace(/\n/g,'<br>')}</li>`).join('')}</ol><p class="hint">Mengen sind auf die geplanten Portionen skaliert. Zeit- oder Mengenangaben im Zubereitungstext werden nicht automatisch umgeschrieben.</p>`;
   }
@@ -328,7 +388,7 @@ class EssensplanCard extends HTMLElement {
       <div class="recipe-info"><h3>${esc(r.name)}</h3><small>${this.recipeMeta(r)}</small><div class="actions"><button data-favorite="${esc(r.id)}" aria-pressed="${Boolean(r.favorite)}">${r.favorite?'★ Favorit':'☆ Favorit'}</button><button data-edit="${esc(r.id)}">Bearbeiten</button><button class="danger" data-delete="${esc(r.id)}">Löschen</button></div></div></article>`).join('')}</div>
       ${Object.keys(this.data.recipes).length?'':'<p>Hier entsteht eure persönliche Rezeptsammlung. Bilder sind optional.</p>'}`;
   }
-  openRecipeDialog(id, trigger, schedule = false, editMeal) {
+  openRecipeDialog(id, trigger, schedule = false, editMeal, openLeftover = false) {
     const r = this.data.recipes[id];
     if (!r || this._saving) return;
     const root = this.shadowRoot;
@@ -420,7 +480,7 @@ class EssensplanCard extends HTMLElement {
           if (!batch || batch.recipe_id!==id || !batch.cook_servings || (stamp>date.value || stamp===date.value && index>=Number(slot.value))) return;
           const used=reserved(stamp,index);
           const left=Number(batch.cook_servings)-Number(batch.servings)-used;
-          if(left>0.0001) available.push([`${stamp}/${index}`,`Vorbereitet: ${labelDate(stamp)}, Gericht ${index+1} (${pretty(left)} frei)`]);
+          if(left>0.0001) available.push([`${stamp}/${index}`,` ${batch.cooked?'Vorbereitet':'Geplant'}: ${labelDate(stamp)}, Gericht ${index+1} (${pretty(left)} frei)`]);
         });
         source.innerHTML='<option value="">Frisch kochen</option>'+available.map(([value,label])=>`<option value="${esc(value)}">${esc(label)}</option>`).join('');
         if (available.some(([value])=>value===selected)) source.value=selected;
@@ -466,6 +526,7 @@ class EssensplanCard extends HTMLElement {
       };
     }
     dialog.showModal();
+    if (openLeftover) dialog.querySelector('#plan-add-leftover:not([hidden])')?.click();
   }
   bindRecipeImages(root) {
     root.querySelectorAll('[data-recipe-image]').forEach(img=>{
@@ -498,6 +559,10 @@ class EssensplanCard extends HTMLElement {
     };
     dialog.showModal();
   }
+  clearOcrPreview() {
+    if (this._ocrPreviewUrl) URL.revokeObjectURL(this._ocrPreviewUrl);
+    this._ocrPreviewUrl=null;
+  }
   clearImagePreview() {
     if (this._imagePreviewUrl) URL.revokeObjectURL(this._imagePreviewUrl);
     this._imagePreviewUrl=null;
@@ -522,8 +587,8 @@ class EssensplanCard extends HTMLElement {
       <div class="actions"><button type="button" id="choose-screenshot">Zutaten aus Screenshot übernehmen</button></div>
       <input id="recipe-screenshot" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Rezept-Screenshot auswählen" hidden>
       <p class="hint" id="ocr-status" role="status"></p>
-      <div id="ocr-review" hidden><label for="ocr-text">Erkannte Zutaten · eine pro Zeile</label>
-      <textarea id="ocr-text"></textarea><p id="ocr-diff" class="hint"></p><button type="button" id="apply-ocr">Neue Zutaten hinzufügen</button>
+      <div id="ocr-review" hidden><div class="ocr-columns"><img id="ocr-preview" hidden alt="Ausschnitt der Zutatenliste"><div><label for="ocr-text">Erkannte Zutaten · eine pro Zeile</label>
+      <textarea id="ocr-text"></textarea><ul id="ocr-flags" class="hint" aria-live="polite" hidden></ul></div></div><p id="ocr-diff" class="hint"></p><button type="button" id="apply-ocr">Neue Zutaten hinzufügen</button>
       <p class="hint">Vorhandene Zutaten und ihre Mengen bleiben erhalten.</p></div>
       <label for="name">Rezeptname</label><input id="name" required maxlength="200" value="${esc(r.name)}">
       <label for="servings">Portionen im Grundrezept</label><input id="servings" type="number" min="0.1" max="100" step="0.1" required value="${esc(r.servings)}">
@@ -581,9 +646,15 @@ class EssensplanCard extends HTMLElement {
     {
       const screenshot=field('recipe-screenshot'), choose=field('choose-screenshot'), status=field('ocr-status');
       const review=field('ocr-review'), raw=field('ocr-text');
-      let ocr;
+      const crop=field('ocr-preview'), flagsList=field('ocr-flags');
+      let ocr, flags=[];
+      const resetCrop=()=>{crop.removeAttribute('src');crop.hidden=true;this.clearOcrPreview();};
       const ingredientKey=name=>name.normalize('NFKC').toLocaleLowerCase('de').trim().replace(/\s+/g,' ');
       const previewItems=()=>{
+        const lines=raw.value.slice(0,16000).split(/\r?\n/).map(line=>line.trim());
+        const warnings=[...new Set([...flags.filter(line=>lines.includes(line)),...lines.filter(ocr?.uncertainAmount || (()=>false))])];
+        flagsList.replaceChildren(...warnings.map(line=>{const li=document.createElement('li');li.textContent='Bitte prüfen: '+line;return li;}));
+        flagsList.hidden=!warnings.length;
         const known=new Set([...ingredients.querySelectorAll('[data-name]')].map(input=>ingredientKey(input.value)));
         const added=[], skipped=[];
         for (const item of ocr?.parseIngredientLines(raw.value.slice(0,16000)) || []) {
@@ -602,15 +673,23 @@ class EssensplanCard extends HTMLElement {
         screenshot.value='';
         if (!file || saving) return;
         choose.disabled=true;
+        resetCrop();
+        flags=[];
         review.hidden=true;
         status.textContent='Screenshot wird auf diesem Gerät gelesen …';
         try {
-          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.7.2');
+          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.8.0');
           const recognized=await ocr.recognizeRecipe(file, progress=>{
             if (form.isConnected) status.textContent=`Screenshot wird lokal gelesen … ${progress} %`;
           });
           if (!form.isConnected) return;
-          const found=ocr.extractIngredientLines(recognized.slice(0,16000));
+          const {lines:found,preview,uncertain}=recognized;
+          flags=uncertain;
+          if (preview) {
+            this._ocrPreviewUrl=URL.createObjectURL(preview);
+            crop.src=this._ocrPreviewUrl;
+            crop.hidden=false;
+          }
           if (!found.length) throw new Error('Keine Zutatenliste erkannt. Wähle einen Ausschnitt mit der Überschrift „Zutaten“ oder nur der Liste.');
           raw.value=found.join('\n');
           review.hidden=false;
@@ -633,6 +712,8 @@ class EssensplanCard extends HTMLElement {
         status.textContent=`${added.length} neue Zutaten übernommen.${added.length<draft.length?' Höchstens 100 Zutaten passen in ein Rezept.':''} Prüfe Mengen und Einheiten.`;
         review.hidden=true;
         raw.value='';
+        flags=[];
+        resetCrop();
         ingredients.querySelector('[data-name]')?.focus();
       };
     }
@@ -736,13 +817,22 @@ class EssensplanCard extends HTMLElement {
       const id=el.dataset.favorite;this.change('favorite',{id,favorite:!this.data.recipes[id].favorite});
     });
     root.querySelectorAll('[data-amount]').forEach(el=>el.onclick=()=>this.shoppingAmount(el.dataset.amount,el));
+    root.querySelectorAll('[data-pick-slot]').forEach(el=>el.onclick=()=>this.openRecipePicker(el.dataset.pickSlot,Number(el.dataset.slot),el));
+    root.querySelectorAll('[data-cooked]').forEach(el=>el.onclick=()=>{
+      const date=el.dataset.cooked,slot=Number(el.dataset.slot);
+      if (this._mealDrafts?.[`${date}/${slot}`]) {
+        root.querySelector('#error').textContent='Speichere zuerst die Änderungen an diesem Platz.';
+        return;
+      }
+      this.change('mark_cooked',{date,slot,cooked:el.getAttribute('aria-pressed')!=='true'});
+    });
     root.querySelectorAll('[data-meal-prep]').forEach(el=>el.onclick=()=>{
       const date=el.dataset.mealPrep, slot=Number(el.dataset.slot), meal=this.mealsFor(date)[slot];
       if (this._mealDrafts?.[`${date}/${slot}`]) {
         root.querySelector('#error').textContent='Speichere zuerst die Änderungen an diesem Platz.';
         return;
       }
-      if(meal) this.openRecipeDialog(meal.recipe_id,el,true,{date,slot});
+      if(meal) this.openRecipeDialog(meal.recipe_id,el,true,{date,slot},el.hasAttribute('data-leftover'));
     });
     root.querySelectorAll('[data-mode]').forEach(el=>el.onclick=()=>{this._recipeId=null;this.navigate(el.dataset.mode);});
     root.querySelectorAll('[data-shift]').forEach(el=>el.onclick=()=>{this.week=offsetDay(this.week,Number(el.dataset.shift));this.render();});

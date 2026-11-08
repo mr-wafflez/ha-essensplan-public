@@ -113,7 +113,7 @@ async def ws_get(hass, connection, msg):
 
 @websocket_api.websocket_command({
     vol.Required('type'): 'essensplan/change',
-    vol.Required('operation'): vol.In(['save_recipe', 'delete_recipe', 'set_meal', 'shopping_week', 'complete', 'favorite', 'shopping_amount']),
+    vol.Required('operation'): vol.In(['save_recipe', 'delete_recipe', 'set_meal', 'shopping_week', 'complete', 'favorite', 'shopping_amount', 'mark_cooked']),
     vol.Required('payload'): dict,
     vol.Required('revision'): vol.All(int, vol.Range(min=0)),
 })

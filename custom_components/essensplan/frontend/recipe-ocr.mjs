@@ -19,26 +19,51 @@ export async function recognizeRecipe(file, progress = () => {}) {
     throw new Error('Wähle einen Screenshot als PNG, JPEG oder WebP (bis 20 MB).');
   }
   const bitmap = await createImageBitmap(file);
+  let worker;
   try {
     if (bitmap.width * bitmap.height > 25000000) throw new Error('Der Screenshot ist zu groß. Schneide ihn bitte zu.');
-  } finally { bitmap.close(); }
-  const Tesseract = await loadEngine();
-  const local = location.origin + assets;
-  const worker = await Tesseract.createWorker('deu', 1, {
-    workerPath: local + '/worker.min.js',
-    corePath: local + '/tesseract-core-lstm.wasm.js',
-    langPath: local,
-    gzip: false,
-    workerBlobURL: false,
-    cacheMethod: 'none',
-    logger: event => {
-      if (event.status === 'recognizing text') progress(Math.round(event.progress * 100));
-    },
-  });
-  try {
-    const {data} = await worker.recognize(file);
-    return data.text.trim();
-  } finally { await worker.terminate(); }
+    const Tesseract = await loadEngine();
+    const local = location.origin + assets;
+    worker = await Tesseract.createWorker('deu', 1, {
+      workerPath: local + '/worker.min.js',
+      corePath: local + '/tesseract-core-lstm.wasm.js',
+      langPath: local,
+      gzip: false,
+      workerBlobURL: false,
+      cacheMethod: 'none',
+      logger: event => {
+        if (event.status === 'recognizing text') progress(Math.round(event.progress * 100));
+      },
+    });
+    const {data} = await worker.recognize(file, {}, {text:true,blocks:true});
+    const lines=extractIngredientLines(data.text.slice(0,16000));
+    const matched=[];
+    const blocks=data.blocks || [];
+    for (const block of blocks) for (const paragraph of block.paragraphs) for (const row of paragraph.lines) {
+      const line=row.text.trim().replace(bullet,'').trim();
+      if (lines.includes(line)) matched.push({line,bbox:row.bbox,confidence:row.confidence});
+    }
+    const uncertain=matched.filter(row=>row.confidence<80).map(row=>row.line);
+    return {lines, uncertain, preview:await previewCrop(bitmap,matched.map(row=>row.bbox))};
+  } finally {
+    bitmap.close();
+    if (worker) await worker.terminate();
+  }
+}
+
+async function previewCrop(bitmap,boxes) {
+  if (!boxes.length) return null;
+  const padding=12;
+  const x=Math.max(0,Math.min(...boxes.map(b=>b.x0))-padding);
+  const y=Math.max(0,Math.min(...boxes.map(b=>b.y0))-padding);
+  const width=Math.min(bitmap.width,Math.max(...boxes.map(b=>b.x1))+padding)-x;
+  const height=Math.min(bitmap.height,Math.max(...boxes.map(b=>b.y1))+padding)-y;
+  if (width<=0 || height<=0) return null;
+  const scale=Math.min(1,1400/Math.max(width,height));
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
+  canvas.getContext('2d').drawImage(bitmap,x,y,width,height,0,0,canvas.width,canvas.height);
+  return new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
 }
 
 const units = new Map(Object.entries({
@@ -113,4 +138,10 @@ export function parseIngredientLines(text) {
     // Split “1 Zwiebel & 2 Knoblauchzehen”, but keep “Salz & Pfeffer”.
     return items.every(item => item.quantity) ? items : [ingredient(line)];
   }).filter(item => item.name);
+}
+
+export function uncertainAmount(line) {
+  return /^(?:\d+[.,]?\d*\s*[-–]\s*\d+|[IlO]\s+(?:g|kg|ml|l|el|tl)\b)|\d\s*mi\b/i.test(line)
+    || /^\d+(?:[.,]\d+)?\s*(?:EL|TL|ML|KG|G)(?=\p{L})/u.test(line)
+    || (/^[\d½¼¾⅓⅔⅛]/.test(line) && !ingredient(line).quantity);
 }

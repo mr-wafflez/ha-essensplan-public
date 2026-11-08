@@ -15,6 +15,14 @@ Eine lokale Custom Integration mit eigener Dashboard-Karte. Kein zusätzlicher S
 
 Die Integration enthält ihre Dashboard-Karte bereits. Bei einer neuen Einrichtung steht der vollständige Plan direkt als **Essensplan** in der Seitenleiste bereit. Vorhandene Essensplan-Dashboards werden weiterverwendet.
 
+## Einblicke
+
+![Rezeptwahl aus einem freien Wochenplanplatz](docs/images/rezeptwahl.png)
+![Mealprep am Kochplatz](docs/images/mealprep.png)
+![Lokale Screenshot-Prüfung](docs/images/screenshot-pruefung.png)
+
+Die Abbildungen verwenden Testrezepte und Beispieldaten.
+
 ## Rezeptkarten
 
 Die Suche unter **Rezepte** findet Namen und Zutaten. Mit **★ Favorit** markierst
@@ -22,12 +30,12 @@ du ein Rezept; **Nur Favoriten** schränkt die Ansicht ein.
 
 Beim Anlegen oder Bearbeiten kannst du **Zutaten aus Screenshot übernehmen** wählen.
 Die Texterkennung für deutsche Screenshots läuft auf dem Gerät, auf dem das
-Dashboard geöffnet ist. Die Vorschau zeigt nur Zutatenzeilen. Prüfe und
+Dashboard geöffnet ist. Neben den erkannten Zutaten siehst du den Bildausschnitt. Unsichere Zeilen sind zur Prüfung markiert. Prüfe und
 korrigiere bei Bedarf Mengen und Einheiten, bevor du sie übernimmst. Die Vorschau
 zeigt, welche Zutaten neu sind und welche bereits vorhanden sind. Du kannst
 mehrere Screenshots nacheinander ergänzen. Vorhandene Zutaten, Titel,
 Portionen und Zubereitung bleiben unverändert. Verwende einen Ausschnitt mit
-der Überschrift „Zutaten“ oder eine eng zugeschnittene Liste.
+der Überschrift „Zutaten“ oder eine eng zugeschnittene Liste. Die lokale Bildvorschau wird nach dem Übernehmen, beim Verlassen des Editors oder bei einer neuen Auswahl freigegeben.
 
 Die lokale OCR verwendet Tesseract.js 7.0.0, Tesseract.js Core 7.0.0 und
 deutsche Sprachdaten aus tessdata_fast 4.1.0. Engine, Sprachdaten und
@@ -38,6 +46,15 @@ Unter **Rezepte** öffnet das Buchsymbol die Rezeptdetails. Über das Kalendersy
 oder **Einplanen** im Detaildialog wählst du Datum, Platz und Portionen. Ist ein
 Platz belegt, muss das Ersetzen bestätigt werden. Die Einkaufsliste wird wie beim
 Speichern im Wochenplan aktualisiert.
+
+Im Wochenplan öffnet **Rezept auswählen** die Suche direkt am freien Platz.
+Die Auswahl lässt sich auf Favoriten oder **Zuletzt gekocht** einschränken.
+Datum und Platz bleiben beim anschließenden Einplanen vorbelegt.
+
+Am Kochplatz stehen die noch unverplanten Portionen und **Reste einplanen**.
+Mit **Als gekocht markieren** bestätigst du ab dem Kochtag die Zubereitung.
+Erst dann zeigt der Plan verknüpfte Termine als vorbereitet. Der Kochstatus
+kann rückgängig gemacht werden und ändert die Einkaufsmengen nicht.
 
 Die Zubereitungsdauer ist optional und lässt sich im Rezepteditor ergänzen.
 Rezepte ohne Bild oder mit einer nicht mehr erreichbaren Bilddatei verwenden eine
@@ -274,3 +291,7 @@ Essensplan steht unter [Apache 2.0](LICENSE). Hinweise zu mitgelieferter Softwar
 - [WebSocket-Erweiterungen](https://developers.home-assistant.io/docs/frontend/extending/websocket-api/)
 - [To-do-Entitäten](https://developers.home-assistant.io/docs/core/entity/todo/)
 - [Config Flow](https://developers.home-assistant.io/docs/core/integration/config_flow/)
+
+## Automatisierter Paketbau
+
+GitHub Actions führt auf Pull Requests, auf `main` und bei `v*`-Tags die Tests aus und hinterlegt das ZIP als Workflow-Artefakt. Bei Tags prüft der Build die Übereinstimmung mit der Manifestversion.
