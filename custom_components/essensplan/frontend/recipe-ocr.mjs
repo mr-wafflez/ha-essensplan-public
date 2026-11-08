@@ -142,5 +142,6 @@ export function parseIngredientLines(text) {
 
 export function uncertainAmount(line) {
   return /^(?:\d+[.,]?\d*\s*[-–]\s*\d+|[IlO]\s+(?:g|kg|ml|l|el|tl)\b)|\d\s*mi\b/i.test(line)
+    || /^\d+(?:[.,]\d+)?\s*(?:EL|TL|ML|KG|G)(?=\p{L})/u.test(line)
     || (/^[\d½¼¾⅓⅔⅛]/.test(line) && !ingredient(line).quantity);
 }
