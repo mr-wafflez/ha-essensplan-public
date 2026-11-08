@@ -35,6 +35,10 @@ const assert = require('node:assert/strict');
     item.amount={quantity:p.quantity,unit:p.unit};item.summary=p.quantity+' '+p.unit+' '+item.ingredient;
    }
    if(cmd.operation==='complete'){state.shopping.find(i=>i.uid===cmd.payload.uid).completed=cmd.payload.completed;}
+   if(cmd.operation==='mark_cooked'){
+    const p=cmd.payload, meals=state.plan[p.date];
+    (Array.isArray(meals)?meals[p.slot]:meals).cooked=p.cooked;
+   }
    if(cmd.operation==='set_meal'){
     if(window.rejectMeal) throw Error('Speichern fehlgeschlagen');
     const p=cmd.payload,old=state.plan[p.date],meals=Array.isArray(old)?old:old?[old]:[],slot=p.slot||0;
@@ -53,6 +57,9 @@ const assert = require('node:assert/strict');
   const card=document.createElement('essensplan-card');card.setConfig({mode:'today'});document.querySelector('main').append(card);card.hass=hass;window.card=card;
  });
  const card=page.locator('essensplan-card');
+ const capture=async (name, locator)=>{
+  if (process.env.ESSENSPLAN_DOC_IMAGES) await locator.screenshot({path:path.join(process.env.ESSENSPLAN_DOC_IMAGES,name+'.png'),animations:'disabled'});
+ };
  await card.locator('#today').waitFor();
  assert.match(await card.locator('#today').innerText(),/Hähnchen-Curry <sicher>/);
  await card.locator('#today').click();
@@ -73,6 +80,9 @@ const assert = require('node:assert/strict');
  });
  await card.locator('#recipe-screenshot').setInputFiles({name:'rezept.png',mimeType:'image/png',buffer:Buffer.from(screenshot,'base64')});
  await card.locator('#ocr-review').waitFor({timeout:30000});
+ await card.locator('#ocr-preview').waitFor();
+ assert(await card.locator('#ocr-preview').evaluate(img=>img.decode().then(()=>img.naturalHeight<570)));
+ await capture('screenshot-pruefung',card.locator('#ocr-review'));
  const recognizedLines=(await card.locator('#ocr-text').inputValue()).split('\n');
  assert.equal(recognizedLines.length,2);
  assert.equal(recognizedLines[0],'500 g Kartoffeln');
@@ -241,10 +251,26 @@ const assert = require('node:assert/strict');
  assert.match(await card.locator('ul').innerText(),/300 g Tomaten/);
  await card.locator('[data-mode="week"]').click();
  assert.equal(await card.locator('form[data-meal-slot]').count(),14);
+ const pick=card.locator('[data-pick-slot="2026-10-16"][data-slot="1"]');
+ await pick.click();
+ await dialog.locator('select').selectOption('recent');
+ assert.match(await dialog.innerText(),/Keine passenden Rezepte/);
+ await dialog.locator('select').selectOption('');
+ await dialog.locator('input').fill('Tomaten');
+ await capture('rezeptwahl',dialog);
+ await dialog.locator('[data-pick="salad"]').click();
+ assert.equal(await dialog.locator('#plan-date').inputValue(),'2026-10-16');
+ assert.equal(await dialog.locator('#plan-slot').inputValue(),'1');
+ await dialog.locator('[data-close]').click();
  await card.locator('[data-meal-prep="2026-10-15"][data-slot="0"]').click();
  await card.locator('#plan-cook').fill('6');
  await card.locator('dialog [type=submit]').click();
  await card.locator('dialog').waitFor({state:'hidden'});
+ assert.match(await card.locator('[data-date="2026-10-15"]').innerText(),/4 Portionen noch nicht verplant/);
+ await capture('mealprep',card.locator('[data-date="2026-10-15"]'));
+ await card.locator('[data-leftover][data-meal-prep="2026-10-15"]').click();
+ assert.equal(await dialog.locator('#leftover-date').inputValue(),'2026-10-16');
+ await dialog.locator('[data-close]').click();
  await card.locator('[data-mode="recipes"]').click();
  await card.locator('[data-schedule="r1"]').click();
  await card.locator('#plan-date').fill('2026-10-16');
@@ -255,7 +281,13 @@ const assert = require('node:assert/strict');
  assert(await page.evaluate(()=>state.plan['2026-10-15'][0].cook_servings==='6' &&
   state.plan['2026-10-16'][0].prepared_from.date==='2026-10-15'));
  await card.locator('[data-mode="week"]').click();
+ assert.match(await card.locator('[data-date="2026-10-16"]').innerText(),/Geplante Reste/);
+ await card.locator('[data-cooked="2026-10-15"][data-slot="0"]').click();
  assert.match(await card.locator('[data-date="2026-10-16"]').innerText(),/Vorbereitet am/);
+ await pick.click();
+ await dialog.locator('select').selectOption('recent');
+ assert.equal(await dialog.locator('[data-pick="r1"]').count(),1);
+ await dialog.locator('[data-close]').click();
  const lunch=card.locator('[data-date="2026-10-15"] [data-meal-slot="0"]');
  const dinner=card.locator('[data-date="2026-10-15"] [data-meal-slot="1"]');
  await lunch.locator('input').fill('3');
