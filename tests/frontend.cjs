@@ -33,10 +33,18 @@ const assert = require('node:assert/strict');
   if(cmd.type==='essensplan/change'){
    if(cmd.revision!==state.revision)throw Error('Revisionskonflikt');
    if(cmd.operation==='save_recipe'){const r=cmd.payload;state.recipes[r.id||'new']={...r,id:r.id||'new'};}
-   if(cmd.operation==='set_nutrition'){
-    const r=state.recipes[cmd.payload.id];
-    r.ingredients.forEach((ingredient,i)=>{ingredient.nutrition=cmd.payload.assignments[i];});
-    state.nutrition={r1:{used:1,missing:['Salz'],portion:{kcal:125,protein:20,carbs:1,fat:3},total:{kcal:500,protein:80,carbs:4,fat:12}}};
+   if(cmd.operation==='set_ingredients'||cmd.operation==='save_amounts'){
+    for(const raw of cmd.payload.items&&cmd.operation==='set_ingredients'?cmd.payload.items:cmd.payload.ingredients||[]){
+     const entry=state.ingredient_list.find(e=>e.name===raw.name);
+     Object.assign(entry,{nutrition:raw.nutrition,status:raw.ignore?'ignored':raw.nutrition?'mapped':'open',ignore:raw.ignore,
+      label:raw.nutrition?.product?.name||'Hähnchen Brust, roh'});
+     for(const [unit,grams] of Object.entries(raw.weights||{})) entry.weights[unit]={grams,source:'own'};
+    }
+    if(cmd.operation==='save_amounts') state.recipes[cmd.payload.id].ingredients.forEach((item,i)=>{
+     item.quantity=cmd.payload.items[i].quantity||null;item.unit=cmd.payload.items[i].unit;});
+    const done=cmd.operation==='save_amounts';
+    state.nutrition={r1:{used:done?2:1,missing:done?[]:['Zwiebel'],items:[{name:'Hähnchen',status:'ok'},{name:'Zwiebel',status:done?'ok':'amount'},{name:'Salz',status:'ignored'}],
+     portion:{kcal:125,protein:20,carbs:1,fat:3},total:{kcal:500,protein:80,carbs:4,fat:12}}};
    }
    if(cmd.operation==='favorite'){state.recipes[cmd.payload.id].favorite=cmd.payload.favorite;}
    if(cmd.operation==='shopping_amount'){
@@ -136,11 +144,32 @@ const assert = require('node:assert/strict');
   pagePng('3.png',['2. Milch erhitzen.','3. Alles gut mischen.','Speichern und teilen','Nicht Teil des Rezepts.']),
  ]);
 
- await page.evaluate(()=>{state.modules={nutrition:true};return card.load();});
- await card.locator('[data-nutrition="r1"]').click();
+ const savedRecipe=await page.evaluate(()=>JSON.stringify(state.recipes.r1));
+ await page.evaluate(()=>{
+  const generic={el:{grams:'10',source:'generic'},tl:{grams:'4',source:'generic'},prise:{grams:'0.3',source:'generic'},ml:{grams:'1',source:'generic'}};
+  const entry=(key,name,extra)=>({key,name,recipes:1,units:[],unmeasured:0,status:'open',ignore:false,ignore_default:false,
+   nutrition:null,label:'',weights:structuredClone(generic),defaults:structuredClone(generic),...extra});
+  state.recipes.r1.ingredients.push({name:'Zwiebel',quantity:null,unit:''},{name:'Salz',quantity:null,unit:''});
+  state.ingredient_list=[entry('hahnchen','Hähnchen',{units:['g']}),entry('zwiebel','Zwiebel',{unmeasured:1}),
+   entry('salz','Salz',{status:'ignored',ignore:true,ignore_default:true,unmeasured:1})];
+  state.nutrition={r1:{used:0,missing:['Hähnchen','Zwiebel'],items:[{name:'Hähnchen',status:'mapping'},{name:'Zwiebel',status:'amount'},{name:'Salz',status:'ignored'}],
+   portion:{kcal:0,protein:0,carbs:0,fat:0},total:{kcal:0,protein:0,carbs:0,fat:0}}};
+  state.modules={nutrition:true};return card.load();
+ });
+ assert.match(await card.locator('[data-recipe-card="r1"]').innerText(),/noch nicht berechenbar · 2 Zutaten offen/);
+ // The household ingredient list: one row per ingredient, suggestions, spices hidden under "Offen".
+ await card.locator('[data-ingredients]').click();
  const nutritionDialog=card.locator('dialog');
- await nutritionDialog.locator('select option[value="A1"]').waitFor({state:'attached'});
- assert.equal(await nutritionDialog.locator('select').inputValue(),'');
+ await nutritionDialog.getByText('Vorschlag: Hähnchen Brust, roh',{exact:false}).first().waitFor();
+ assert.match(await nutritionDialog.locator('[data-summary]').innerText(),/0 von 3 Zutaten zugeordnet · 1 zählen nicht · 2 offen/);
+ assert.equal(await nutritionDialog.locator('.ing-row').count(),2);
+ await nutritionDialog.locator('[data-filter="all"]').click();
+ assert.match(await nutritionDialog.locator('.ing-row[data-key="salz"]').innerText(),/Zählt nicht/);
+ const chicken=nutritionDialog.locator('.ing-row[data-key="hahnchen"]');
+ await chicken.locator('[data-edit]').click();
+ const panel=chicken.locator('.ing-panel');
+ assert(await panel.locator('input[type=radio][value="A1"]').isChecked());
+ await panel.getByText('Eigene Werte oder Barcode').click();
  // A genuine EAN-13 image goes through the bundled decoder, then requires an explicit lookup.
  const barcodeImage=await page.evaluate(()=>{
   const code='3017620422003', left=['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
@@ -153,32 +182,38 @@ const assert = require('node:assert/strict');
   ctx.fillStyle='black';[...bits].forEach((bit,i)=>{if(bit==='1')ctx.fillRect(40+i*4,16,4,140);});
   return canvas.toDataURL('image/png').split(',')[1];
  });
- const photoButton=nutritionDialog.getByRole('button',{name:'Barcode fotografieren'});
+ const photoButton=panel.getByRole('button',{name:'Barcode fotografieren'});
  const chooserEvent=page.waitForEvent('filechooser');
  await photoButton.click();
  const chooser=await chooserEvent;
  assert.equal(await chooser.element().getAttribute('capture'),'environment');
  await chooser.setFiles({name:'barcode.png',mimeType:'image/png',buffer:Buffer.from(barcodeImage,'base64')});
- await nutritionDialog.getByText('Barcode erkannt.',{exact:false}).waitFor();
- assert.equal(await nutritionDialog.locator('[data-barcode]').inputValue(),'3017620422003');
+ await panel.getByText('Barcode erkannt.',{exact:false}).waitFor();
+ assert.equal(await panel.locator('[data-barcode]').inputValue(),'3017620422003');
  assert(await page.evaluate(()=>!calls.some(cmd=>cmd.type==='essensplan/barcode_lookup')));
- await nutritionDialog.locator('[data-lookup]').click();
- await nutritionDialog.getByText('Testprodukt gefunden.',{exact:false}).waitFor();
- assert.equal(await nutritionDialog.locator('[name=kcal]').inputValue(),'539');
- await nutritionDialog.locator('[type=submit]').click();
- assert(await page.evaluate(()=>calls.some(cmd=>cmd.operation==='set_nutrition' &&
-  cmd.payload.assignments[0].product.barcode==='3017620422003')));
- await nutritionDialog.waitFor({state:'hidden'});
+ await panel.locator('[data-lookup]').click();
+ await panel.getByText('Testprodukt gefunden.',{exact:false}).waitFor();
+ assert.equal(await panel.locator('[name=kcal]').inputValue(),'539');
+ assert(await panel.locator('input[type=radio][value="product"]').isChecked());
+ await panel.locator('[data-apply]').click();
+ assert.match(await chicken.innerText(),/✓ Testprodukt/);
+ assert.equal(await nutritionDialog.locator('[data-save]').innerText(),'1 Änderung speichern');
+ await nutritionDialog.locator('[data-save]').click();
+ assert(await page.evaluate(()=>calls.some(cmd=>cmd.operation==='set_ingredients' &&
+  cmd.payload.items[0].nutrition.product.barcode==='3017620422003' && cmd.payload.items[0].name==='Hähnchen')));
+ await nutritionDialog.waitFor({state:'detached'});
  assert.match(await card.locator('[data-recipe-card="r1"]').innerText(),/unvollständig.*125 kcal/s);
  await card.locator('[data-recipe="r1"]').click();
- assert.match(await nutritionDialog.innerText(),/Gesamtgericht.*500 kcal.*Salz/s);
+ assert.match(await nutritionDialog.innerText(),/Gesamtgericht.*500 kcal.*Menge fehlt: Zwiebel/s);
  await nutritionDialog.locator('[data-close]').click();
  await nutritionDialog.waitFor({state:'detached'});
  // The secure-context permission failure path switches to a new, user-activated photo action.
  await page.evaluate(()=>Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{
   getUserMedia:()=>Promise.reject(new DOMException('Test permission denied','NotAllowedError'))
  }}));
- await card.locator('[data-nutrition="r1"]').click();
+ await card.locator('[data-ingredients]').click();
+ await nutritionDialog.locator('.ing-row[data-key="zwiebel"] [data-edit]').click();
+ await nutritionDialog.getByText('Eigene Werte oder Barcode').click();
  await nutritionDialog.getByRole('button',{name:'Barcode scannen'}).click();
  await nutritionDialog.getByText('Kamerazugriff verweigert.',{exact:false}).waitFor();
  const fallbackEvent=page.waitForEvent('filechooser');
@@ -187,8 +222,30 @@ const assert = require('node:assert/strict');
  await nutritionDialog.locator('[data-close]').click();
  await nutritionDialog.waitFor({state:'detached'});
  await page.evaluate(()=>delete navigator.mediaDevices);
- await page.evaluate(()=>{state.modules.nutrition=false;return card.load();});
- assert.equal(await card.locator('[data-nutrition]').count(),0);
+ // Amounts table: typing keeps focus, a piece needs a weight, one save sends amounts and the list entry.
+ await card.locator('[data-amounts="r1"]').click();
+ const amountRows=nutritionDialog.locator('.amount-row');
+ await amountRows.nth(1).getByText('Menge fehlt').waitFor();
+ assert.match(await amountRows.nth(0).innerText(),/✓ ≈ 500 g/);
+ assert.match(await amountRows.nth(2).innerText(),/zählt nicht/);
+ await amountRows.nth(1).locator('[data-qty]').pressSequentially('2');
+ assert(await page.evaluate(()=>card.shadowRoot.activeElement?.matches('[data-qty]')));
+ await amountRows.nth(1).locator('[data-unit]').selectOption('stück');
+ assert.match(await amountRows.nth(1).innerText(),/Gewicht pro Stück fehlt/);
+ await amountRows.nth(1).locator('[data-edit]').click();
+ await amountRows.nth(1).locator('[data-weight="stück"]').fill('80');
+ await amountRows.nth(1).locator('[data-apply]').click();
+ assert.match(await amountRows.nth(1).innerText(),/✓ ≈ 160 g/);
+ assert.match(await nutritionDialog.locator('[data-summary]').innerText(),/2 von 2 Zutaten vollständig · 1 zählen nicht · 1 Zuordnung neu/);
+ await nutritionDialog.locator('[type=submit]').click();
+ await nutritionDialog.waitFor({state:'detached'});
+ const saved=await page.evaluate(()=>calls.findLast(cmd=>cmd.operation==='save_amounts').payload);
+ assert.deepEqual(saved.items,[{quantity:'500',unit:'g'},{quantity:'2',unit:'stück'},{quantity:'',unit:''}]);
+ assert.deepEqual(saved.ingredients.map(i=>[i.name,i.weights,i.nutrition?.code]),[['Zwiebel',{'stück':'80'},'A1']]);
+ assert.match(await card.locator('[data-recipe-card="r1"]').innerText(),/Pro Portion\n125 kcal/);
+ await page.evaluate(saved=>{state.recipes.r1=JSON.parse(saved);state.modules.nutrition=false;return card.load();},savedRecipe);
+ assert.equal(await card.locator('[data-amounts]').count(),0);
+ assert.equal(await card.locator('[data-ingredients]').count(),0);
  await card.locator('[data-act="new"]').click();
  await card.locator('#recipe-screenshot').setInputFiles([...pages,pages[0]]);
  assert.match(await card.locator('#ocr-status').innerText(),/höchstens drei/);

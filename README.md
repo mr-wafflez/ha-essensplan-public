@@ -19,16 +19,34 @@ Die Integration enthält ihre Dashboard-Karte bereits. Bei einer neuen Einrichtu
 ## Nährwertmodul
 
 Aktiviere das Modul unter **Einstellungen → Geräte & Dienste → Essensplan →
-Konfigurieren**. Öffne dann bei einer Rezeptkarte **Nährwerte zuordnen**.
-Essensplan schlägt lokale BLS-Einträge vor und bevorzugt bestätigte Zuordnungen
-bei gleich benannten Zutaten. Prüfe bei mehrdeutigen Treffern den
-Verarbeitungszustand, etwa roh oder gekocht. Eigene Werte pro 100 g sind möglich.
+Konfigurieren**. Danach gibt es zwei Stellen:
+
+- **Zutaten & Nährwerte** (oben unter **Rezepte**): Jede Zutat steht hier einmal,
+  die häufigsten zuerst. Essensplan schlägt den passenden Eintrag aus dem
+  Bundeslebensmittelschlüssel vor, bevorzugt rohe Grundzutaten. Mit
+  **Übernehmen** gilt die Zuordnung für alle Rezepte mit dieser Zutat. Mit
+  **Ändern** wählst du einen anderen Treffer, etwa gekocht statt roh, oder
+  markierst die Zutat als **zählt nicht**. Gewürze, Salz und Wasser sind von
+  Anfang an so markiert.
+- **Mengen & Nährwerte** (an jeder Rezeptkarte und in den Rezeptdetails): eine
+  kompakte Tabelle mit Menge und Einheit pro Zutat. Daneben steht, was noch fehlt:
+  Menge, Zuordnung oder Gewicht. Ein Speichern übernimmt Mengen und neue
+  Zuordnungen gemeinsam.
+
+Gramm und Kilogramm werden direkt gerechnet. Stück, EL, TL, Bund, Dose und
+Prise rechnet Essensplan über das Gewicht der Zutat um, Milliliter über die
+Dichte. Für häufige Zutaten sind Startwerte hinterlegt, etwa 1 Zwiebel = 80 g,
+1 Knoblauchzehe = 4 g und 1 EL = 10 g. Unter **Gewicht pro Einheit** kannst du
+jeden Wert überschreiben. Eine Menge ohne Einheit zählt als Stück.
 
 Die Rezeptkarte zeigt Kalorien, Protein, Kohlenhydrate und Fett pro Portion.
-In den Details stehen auch die Werte für das Gesamtgericht. Gramm und Kilogramm
-werden umgerechnet. Für Stück, Löffel oder Volumen kannst du das tatsächliche
-Gesamtgewicht in Gramm angeben. Fehlende Zuordnungen und Gewichte führen zu
-einer als unvollständig gekennzeichneten Summe.
+In den Details stehen auch die Werte für das Gesamtgericht und welche Zutaten
+noch fehlen. Fehlende Mengen, Zuordnungen oder Gewichte führen zu einer als
+unvollständig gekennzeichneten Summe.
+
+Zuordnungen aus früheren Versionen, die direkt an einer Rezeptzutat hängen,
+gelten in diesem Rezept weiter. In **Mengen & Nährwerte** kannst du sie durch
+die Zuordnung aus der Zutatenliste ersetzen.
 
 Die Suche und Berechnung laufen lokal. Der mitgelieferte Katalog ist ein Auszug
 aus dem [Bundeslebensmittelschlüssel 4.0](https://blsdb.de/download) des
@@ -36,7 +54,7 @@ Max Rubner-Instituts. [Quellen- und Lizenzhinweise](docs/bls-attribution.md)
 
 ### Barcode für Markenprodukte
 
-Unter **Nährwerte zuordnen** kannst du bei einer Zutat einen Barcode live
+Unter **Ändern → Eigene Werte oder Barcode** kannst du bei einer Zutat einen Barcode live
 scannen, ein Barcode-Foto aufnehmen oder die Nummer eingeben. Die Live-Kamera
 braucht HTTPS und eine Kameraerlaubnis. Wenn sie nicht verfügbar ist, öffnet
 **Barcode fotografieren** direkt die Fotoaufnahme oder Bildauswahl. Die

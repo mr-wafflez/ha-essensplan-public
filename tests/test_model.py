@@ -49,7 +49,8 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(current['ingredients'][0]['nutrition']['product'], product)
         self.assertEqual(nutrition.totals(current)['total']['kcal'], 300)
         self.change('save_recipe', {**current, 'ingredients': [{'name': 'Milch', 'quantity': 500, 'unit': 'g'}]})
-        self.assertEqual(nutrition.totals(self.state['recipes'][rid])['missing'], ['Milch'])
+        # Grams convert to millilitres through the density (default 1 g per ml).
+        self.assertEqual(nutrition.totals(self.state['recipes'][rid])['total']['kcal'], 300)
 
     def test_nutrition_suggestions_and_reuse(self):
         raw, cooked, *_ = nutrition.candidates('Reis', {})
@@ -63,7 +64,7 @@ class ModelTests(unittest.TestCase):
     def test_nutrition_totals_are_partial_and_do_not_change_shopping(self):
         values = {'kcal': 120, 'protein': 10, 'carbs': 15, 'fat': 3}
         raw = recipe(quantity='0,5', unit='kg')
-        raw['ingredients'].append({'name': 'Zwiebel', 'quantity': 1, 'unit': 'stück'})
+        raw['ingredients'].append({'name': 'Rucola', 'quantity': 1, 'unit': 'bund'})
         self.change('save_recipe', raw)
         rid = next(iter(self.state['recipes']))
         self.plan(rid)
@@ -72,7 +73,7 @@ class ModelTests(unittest.TestCase):
         result = nutrition.totals(self.state['recipes'][rid])
         self.assertEqual(result['total'], {'kcal': 600, 'protein': 50, 'carbs': 75, 'fat': 15})
         self.assertEqual(result['portion']['kcal'], 150)
-        self.assertEqual(result['missing'], ['Zwiebel'])
+        self.assertEqual(result['missing'], ['Rucola'])
         self.change('set_nutrition', {'id': rid, 'assignments': [{'values': values}, {'values': values, 'grams': '80'}]})
         self.assertEqual(nutrition.totals(self.state['recipes'][rid])['total']['kcal'], 696)
         self.assertEqual(model.shopping(self.state, TODAY), before)
@@ -83,6 +84,105 @@ class ModelTests(unittest.TestCase):
         self.assertNotIn('grams', self.state['recipes'][rid]['ingredients'][1]['nutrition'])
         with self.assertRaises(ValueError):
             self.change('set_nutrition', {'id': rid, 'assignments': [{'code': 'invalid'}, None]})
+
+    def test_household_ingredient_list_applies_to_all_recipes(self):
+        onion = nutrition.candidates('Zwiebel', {})[0]
+        first = self.add(name='Auflauf', ingredient='Zwiebeln', quantity='2', unit='stück')
+        second = self.add(name='Suppe', ingredient='zwiebeln', quantity='100', unit='g')
+        self.change('set_ingredients', {'items': [{'name': 'Zwiebeln', 'nutrition': {'code': onion['code']}}]})
+        kcal = nutrition.catalog()[onion['code']][1][0]
+        ingredients = self.state['ingredients']
+        first_totals = nutrition.totals(self.state['recipes'][first], ingredients)
+        self.assertEqual(first_totals['missing'], [])
+        self.assertAlmostEqual(first_totals['total']['kcal'], float(kcal) * 1.6)  # 2 × 80 g default
+        self.assertAlmostEqual(nutrition.totals(self.state['recipes'][second], ingredients)['total']['kcal'], float(kcal))
+        self.change('set_ingredients', {'items': [{'name': 'Zwiebeln', 'nutrition': {'code': onion['code']},
+                                                   'weights': {'stück': '100'}}]})
+        self.assertAlmostEqual(nutrition.totals(self.state['recipes'][first], self.state['ingredients'])['total']['kcal'],
+                               float(kcal) * 2)
+        overview = {item['key']: item for item in nutrition.ingredient_overview(self.state)}
+        entry = overview['zwiebeln']
+        self.assertEqual((entry['recipes'], entry['status'], entry['units']), (2, 'mapped', ['g', 'stück']))
+        self.assertEqual(entry['weights']['stück'], {'grams': '100', 'source': 'own'})
+        self.assertEqual(entry['weights']['el']['source'], 'generic')
+        # An empty entry removes the ingredient from the list again.
+        self.change('set_ingredients', {'items': [{'name': 'ZWIEBELN'}]})
+        self.assertEqual(self.state['ingredients'], {})
+
+    def test_amount_problems_and_ignored_ingredients(self):
+        rid = self.add(ingredient='Salz', quantity='', unit='')
+        values = {'kcal': 100, 'protein': 1, 'carbs': 1, 'fat': 1}
+        self.change('save_recipe', {**self.state['recipes'][rid], 'ingredients': [
+            {'name': 'Salz', 'quantity': '', 'unit': ''},
+            {'name': 'Hähnchen', 'quantity': '', 'unit': ''},
+            {'name': 'Rucola', 'quantity': '1', 'unit': 'bund'},
+            {'name': 'Eier', 'quantity': '2', 'unit': ''}]})
+        self.change('set_ingredients', {'items': [{'name': n, 'nutrition': {'values': values}}
+                                                  for n in ('Hähnchen', 'Rucola', 'Eier')]})
+        result = nutrition.totals(self.state['recipes'][rid], self.state['ingredients'])
+        self.assertEqual([i['status'] for i in result['items']], ['ignored', 'amount', 'weight', 'ok'])
+        self.assertEqual(result['items'][3]['amount'], 120)  # a count without unit uses the piece weight
+        self.assertEqual(result['missing'], ['Hähnchen', 'Rucola'])
+        self.change('set_ingredients', {'items': [{'name': 'Salz', 'ignore': False}]})
+        self.assertEqual(self.state['ingredients']['salz'], {'name': 'Salz', 'ignore': False})
+        self.assertEqual(nutrition.totals(self.state['recipes'][rid], self.state['ingredients'])['items'][0]['status'],
+                         'mapping')
+        with self.assertRaises(ValueError):
+            self.change('set_ingredients', {'items': [{'name': 'Salz', 'weights': {'tasse': '200'}}]})
+        with self.assertRaises(ValueError):
+            self.change('set_ingredients', {'items': [{'name': '  '}]})
+
+    def test_save_amounts_updates_only_quantities_and_list(self):
+        rid = self.add(ingredient='Feta', quantity='', unit='')
+        recipe_before = self.state['recipes'][rid]
+        self.plan(rid)
+        values = {'kcal': 260, 'protein': 17, 'carbs': 1, 'fat': 21}
+        self.change('save_amounts', {'id': rid, 'items': [{'quantity': '1', 'unit': 'stück'}],
+                                     'ingredients': [{'name': 'Feta', 'nutrition': {'values': values}}]})
+        recipe_after = self.state['recipes'][rid]
+        self.assertEqual(recipe_after['ingredients'], [{'name': 'Feta', 'quantity': '1', 'unit': 'stück'}])
+        self.assertEqual({k: v for k, v in recipe_after.items() if k != 'ingredients'},
+                         {k: v for k, v in recipe_before.items() if k != 'ingredients'})
+        self.assertEqual(nutrition.totals(recipe_after, self.state['ingredients'])['total']['kcal'], 520)
+        self.assertEqual(model.shopping(self.state, TODAY)[0]['summary'], '1 Stück Feta')
+        with self.assertRaises(ValueError):
+            self.change('save_amounts', {'id': rid, 'items': []})
+        with self.assertRaises(ValueError):
+            self.change('save_amounts', {'id': rid, 'items': [{'quantity': '', 'unit': 'g'}]})
+
+    def test_recipe_specific_assignment_wins_until_reset(self):
+        rid = self.add(ingredient='Milch', quantity='200', unit='ml')
+        own = {'kcal': 50, 'protein': 3, 'carbs': 5, 'fat': 2}
+        listed = {'kcal': 70, 'protein': 3, 'carbs': 5, 'fat': 4}
+        self.change('set_nutrition', {'id': rid, 'assignments': [{'values': own}]})
+        self.change('set_ingredients', {'items': [{'name': 'Milch', 'nutrition': {'values': listed}}]})
+        result = nutrition.totals(self.state['recipes'][rid], self.state['ingredients'])
+        self.assertEqual((result['total']['kcal'], result['items'][0]['source']), (100, 'recipe'))
+        self.change('save_amounts', {'id': rid, 'items': [{'quantity': '200', 'unit': 'ml', 'use_list': True}]})
+        result = nutrition.totals(self.state['recipes'][rid], self.state['ingredients'])
+        self.assertEqual((result['total']['kcal'], result['items'][0]['source']), (140, 'list'))
+
+    def test_default_weights_match_word_forms(self):
+        self.assertEqual(nutrition.default_weights('rote Zwiebeln')['stück'], '80')
+        self.assertEqual(nutrition.default_weights('Cherrytomaten')['stück'], '80')
+        self.assertEqual(nutrition.default_weights('Hähnchenbrust')['stück'], '150')
+        self.assertNotIn('stück', nutrition.default_weights('Brei'))
+        self.assertTrue(nutrition.ignored_by_default('Salz und Pfeffer'))
+        self.assertTrue(nutrition.ignored_by_default('Taco-Gewürz'))
+        self.assertTrue(nutrition.ignored_by_default('Paprikapulver'))
+        self.assertFalse(nutrition.ignored_by_default('Kakaopulver'))
+        self.assertFalse(nutrition.ignored_by_default('Brühe'))
+
+    def test_suggestions_prefer_raw_basic_foods(self):
+        expected = {'Zwiebel': 'Speisezwiebel roh', 'Paprika': 'Gemüsepaprika rot, roh', 'Eier': 'Hühnerei roh',
+                    'Hackfleisch': 'Rind Hackfleisch, roh', 'passierte Tomaten': 'Tomaten passiert/Tomatenpüree',
+                    'rote Linsen': 'Linse rot reif', 'Cherrytomaten': 'Tomate roh', 'Schnittlauch': 'Schnittlauch roh',
+                    'Ca. 400g Hähnchenbrust': 'Hähnchen Brust, ohne Haut, roh', 'Zucchini': 'Zucchini roh'}
+        for query, name in expected.items():
+            self.assertEqual(nutrition.candidates(query, {})[0]['name'], name, query)
+        unresolved = [name for names in nutrition.ALIASES.values() for name in names
+                      if name not in nutrition.codes_by_name()]
+        self.assertEqual(unresolved, [])
 
     def test_cooked_status_persists_without_changing_shopping(self):
         rid = self.add()

@@ -40,14 +40,14 @@ class ProductLookup:
         self.session = session
         self.cache = {}
 
-    async def find(self, value, recipes):
+    async def find(self, value, state):
         code = barcode(value)
         # Previously confirmed product values remain available offline.
-        for recipe in recipes.values():
-            for item in recipe['ingredients']:
-                entry = item.get('nutrition', {})
-                if entry.get('product', {}).get('barcode') == code:
-                    return {'values': entry['values'], 'product': entry['product']}
+        stored = [item.get('nutrition', {}) for recipe in state['recipes'].values() for item in recipe['ingredients']]
+        stored += [entry.get('nutrition', {}) for entry in state.get('ingredients', {}).values()]
+        for entry in stored:
+            if entry.get('product', {}).get('barcode') == code:
+                return {'values': entry['values'], 'product': entry['product']}
         cached = self.cache.get(code)
         if cached and cached[0] > monotonic():
             return cached[1]

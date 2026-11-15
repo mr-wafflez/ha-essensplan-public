@@ -16,7 +16,7 @@ from .const import CONF_MEALS_PER_DAY, CONF_NUTRITION_ENABLED, DEFAULT_MEALS_PER
 from .model import initial_state, mutate, normalize_state, shopping
 from .frontend import async_register_frontend, async_setup_frontend_entry, async_unload_frontend_entry
 from .sync import ShoppingSync
-from .nutrition import candidates, search_index, totals
+from .nutrition import candidates, ingredient_overview, search_index, totals
 from .products import ProductLookup
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,7 +46,9 @@ class Planner:
         result['meals_per_day'] = self.meals_per_day
         result['modules'] = {'nutrition': self.nutrition_enabled}
         if self.nutrition_enabled:
-            result['nutrition'] = {rid: totals(recipe) for rid, recipe in self.state['recipes'].items()}
+            ingredients = self.state.get('ingredients', {})
+            result['nutrition'] = {rid: totals(recipe, ingredients) for rid, recipe in self.state['recipes'].items()}
+            result['ingredient_list'] = ingredient_overview(self.state)
         result['today'] = dt_util.now().date().isoformat()
         result['shopping'] = shopping(self.state, result['today'])
         return result
@@ -55,7 +57,7 @@ class Planner:
         async with self.lock:
             if revision is not None and revision != self.state['revision']:
                 raise ValueError('Daten wurden inzwischen geändert. Bitte neu laden und erneut versuchen.')
-            if operation == 'set_nutrition' and not self.nutrition_enabled:
+            if operation in ('set_nutrition', 'set_ingredients', 'save_amounts') and not self.nutrition_enabled:
                 raise ValueError('Das Nährwertmodul ist deaktiviert')
             new = mutate(self.state, operation, payload, dt_util.now().date().isoformat(), self.meals_per_day)
             await self.store.async_save(new)
@@ -131,7 +133,7 @@ async def ws_get(hass, connection, msg):
 
 @websocket_api.websocket_command({
     vol.Required('type'): 'essensplan/change',
-    vol.Required('operation'): vol.In(['save_recipe', 'delete_recipe', 'set_meal', 'shopping_week', 'complete', 'favorite', 'shopping_amount', 'mark_cooked', 'set_nutrition']),
+    vol.Required('operation'): vol.In(['save_recipe', 'delete_recipe', 'set_meal', 'shopping_week', 'complete', 'favorite', 'shopping_amount', 'mark_cooked', 'set_nutrition', 'set_ingredients', 'save_amounts']),
     vol.Required('payload'): dict,
     vol.Required('revision'): vol.All(int, vol.Range(min=0)),
 })
@@ -168,8 +170,9 @@ async def ws_nutrition_search(hass, connection, msg):
     if len(queries) > 100 or any(len(query) > 200 for query in queries):
         connection.send_error(msg['id'], 'invalid_input', 'Zu viele oder zu lange Suchbegriffe')
         return
-    recipes = planner.state['recipes']
-    results = await hass.async_add_executor_job(lambda: [candidates(query, recipes) for query in queries])
+    recipes, ingredients = planner.state['recipes'], planner.state.get('ingredients', {})
+    results = await hass.async_add_executor_job(
+        lambda: [candidates(query, recipes, ingredients) for query in queries])
     connection.send_result(msg['id'], results)
 
 
@@ -184,7 +187,7 @@ async def ws_barcode_lookup(hass, connection, msg):
         connection.send_error(msg['id'], 'not_enabled', 'Das Nährwertmodul ist deaktiviert')
         return
     try:
-        product = await planner.products.find(msg['barcode'], planner.state['recipes'])
+        product = await planner.products.find(msg['barcode'], planner.state)
     except (ValueError, TypeError, AttributeError) as err:
         connection.send_error(msg['id'], 'lookup_failed', str(err))
     else:

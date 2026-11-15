@@ -1,5 +1,14 @@
 # Änderungen
 
+## 0.14.0
+
+- Neue Zutatenliste **Zutaten & Nährwerte**: Jede Zutat wird einmal zugeordnet und gilt in allen Rezepten. Häufige Zutaten stehen oben, offene Zutaten zeigen einen Vorschlag zum Übernehmen. Alle Vorschläge lassen sich gesammelt übernehmen und prüfen.
+- **Mengen & Nährwerte** ersetzt „Nährwerte zuordnen“: kompakte Tabelle mit Menge und Einheit pro Zutat und dem jeweiligen Status (Menge fehlt, nicht zugeordnet, Gewicht fehlt). Ein Speichern übernimmt Mengen und Zuordnungen gemeinsam.
+- Gewicht pro Stück, EL, TL, Bund, Dose und Prise sowie die Dichte für ml pro Zutat, mit Startwerten für häufige Zutaten. Mengen ohne Einheit zählen als Stück.
+- Bessere BLS-Vorschläge: rohe Grundzutaten vor Fertiggerichten („Zwiebel“ → „Speisezwiebel roh“), Wortformen und zusammengesetzte Wörter, Mengenangaben im Namen werden ignoriert.
+- Gewürze, Salz, Pfeffer und Wasser zählen standardmäßig nicht für die Nährwerte.
+- Barcode und eigene Werte liegen unter „Eigene Werte oder Barcode“ an der jeweiligen Zutat.
+
 ## 0.13.0
 
 - Eine einzige Navigation oben in der Karte (Heute, Woche, Rezepte, Einkauf) auf allen Ansichten, auch auf der Tageskachel. Die doppelten Schaltflächen unter der Tageskachel entfallen.

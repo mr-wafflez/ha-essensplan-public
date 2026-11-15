@@ -1,4 +1,4 @@
-/* Essensplan 0.13.0 – bundled with the integration; no CDN or build step. */
+/* Essensplan 0.14.0 – bundled with the integration; no CDN or build step. */
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const localDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 function offsetDay(stamp, n) { const d = new Date(`${stamp}T12:00:00`); d.setDate(d.getDate()+n); return localDate(d); }
@@ -209,7 +209,36 @@ class EssensplanCard extends HTMLElement {
       .recipe-info{padding:12px 14px;overflow-wrap:anywhere}.recipe-info h3{margin:0 0 5px}.recipe-info .actions{margin-top:10px}
       .bubbles{position:absolute;right:12px;bottom:12px;display:flex;gap:8px}.bubble{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;padding:0;background:var(--card-background-color,#fff);box-shadow:0 2px 8px #0005}.bubble svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8}
       .barcode-video{width:100%;max-height:240px;object-fit:contain;background:#111}
-      .nutrition-rows{display:grid;gap:12px}.nutrition-rows fieldset{min-width:0;margin:0}
+      dialog.wide{width:min(760px,calc(100% - 24px))}
+      button:disabled{opacity:.5;cursor:default}
+      .ing-summary{font-weight:600;margin:8px 0}
+      .ing-list,.amount-table{display:grid;gap:8px;margin:12px 0}
+      .ing-row,.amount-row{border:1px solid var(--divider-color,#8884);border-radius:16px;padding:10px 12px;min-width:0;background:var(--card-background-color,#fff)}
+      .ing-row.changed{border-color:var(--primary-color)}
+      .ing-head{display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1.5fr) auto;gap:10px;align-items:center}
+      .ing-head .actions{justify-content:flex-end;flex-wrap:nowrap}
+      .ing-name,.ing-state{min-width:0;overflow-wrap:anywhere}.ing-name small,.ing-state small{display:block}
+      .ing-head .actions button{min-height:40px;padding:6px 14px}
+      .ok{color:var(--success-color,#2e7d32);font-weight:600}.warn{color:var(--warning-color,#b26a00);font-weight:600}
+      .amount-row{display:grid;grid-template-columns:88px 96px minmax(0,1fr) auto;gap:8px;align-items:center}
+      .amount-row input[data-qty]{width:100%;text-align:right}.amount-row select{width:100%}
+      .amount-name{min-width:0;overflow-wrap:anywhere}.amount-state{font-size:13px}
+      .amount-row > button{min-height:40px;padding:6px 14px}
+      .amount-row .ing-panel,.amount-row .amount-reset{grid-column:1 / -1}
+      .ing-panel{margin-top:10px;padding-top:10px;border-top:1px dashed var(--divider-color,#8885)}
+      .ing-panel fieldset{border:1px solid var(--divider-color,#8884);border-radius:12px;margin:10px 0;min-width:0}
+      .choice-list{display:grid;gap:2px;margin:8px 0;max-height:260px;overflow:auto}
+      .check-line{display:flex;align-items:center;gap:10px;margin:6px 0}.check-line input{width:22px;height:22px;flex:0 0 auto;min-height:0}
+      .choice{padding:6px 8px;border-radius:10px}.choice:has(input:checked){background:var(--secondary-background-color,#8882)}
+      .search-line{display:flex;gap:8px;align-items:end}.search-line label{flex:1;margin:6px 0 0}
+      .weight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 10px}
+      .weight-grid label{margin:8px 0 0;font-size:13px}
+      details summary{cursor:pointer;margin:8px 0;font-weight:600}
+      button.link{border:0;background:none;padding:0 4px;min-height:0;color:var(--primary-color);text-decoration:underline;box-shadow:none;font-size:inherit}
+      .sticky-actions{position:sticky;bottom:-16px;background:var(--card-background-color,#fff);padding:10px 0;border-top:1px solid var(--divider-color,#8883)}
+      @media(max-width:560px){.ing-head{grid-template-columns:minmax(0,1fr)}.ing-head .actions{flex-wrap:wrap}
+        .amount-row{grid-template-columns:76px 88px minmax(0,1fr)}.amount-row .amount-name{grid-column:1 / -1;grid-row:1}
+        .amount-row > button{grid-column:3}}
       .ocr-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;align-items:start}
       .ocr-columns img{display:block;max-width:100%;max-height:380px;object-fit:contain;border-radius:8px}.ocr-columns textarea{min-height:220px}
       .picker-list{display:grid;gap:8px;margin:12px 0}.picker-list button{text-align:left}
@@ -227,7 +256,7 @@ class EssensplanCard extends HTMLElement {
       ha-card{
         color:var(--ep-text);border-radius:26px;border:1px solid var(--ep-edge);
         background:var(--ep-surface);
-        background-image:url("/essensplan_static/kitchen-background.svg?v=0.13.0"),
+        background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.0"),
           radial-gradient(ellipse at top left,#d9a47524,transparent 68%);
         background-size:min(100%,640px) auto,100% 360px;
         background-position:top right,top left;background-repeat:no-repeat;
@@ -258,7 +287,7 @@ class EssensplanCard extends HTMLElement {
       dialog{box-shadow:0 16px 54px #0005,inset 0 1px 0 var(--ep-glint)}
       @supports (color:color-mix(in srgb,white,black)){
         ha-card{
-          background-image:url("/essensplan_static/kitchen-background.svg?v=0.13.0"),
+          background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.0"),
             radial-gradient(ellipse at 2% 0%,color-mix(in srgb,#e6ad7d 20%,transparent),transparent 63%),
             radial-gradient(ellipse at 96% 16%,color-mix(in srgb,#9baa7f 18%,transparent),transparent 65%),
             radial-gradient(ellipse at 5% 100%,color-mix(in srgb,var(--ep-accent) 12%,transparent),transparent 66%);
@@ -457,206 +486,505 @@ class EssensplanCard extends HTMLElement {
   nutritionHTML(recipe, showTotal = false) {
     if (!this.data.modules?.nutrition) return '';
     const nutrition=this.data.nutrition?.[recipe.id];
-    if (!nutrition?.used) return '<p class="hint">Nährwerte noch nicht berechenbar.</p>';
-    const format=values=>`${pretty(Math.round(values.kcal))} kcal · ${pretty(values.protein)} g Protein · ${pretty(values.carbs)} g Kohlenhydrate · ${pretty(values.fat)} g Fett`;
-    const missing=nutrition.missing.length;
+    const open=(nutrition?.items || []).filter(item=>!['ok','ignored'].includes(item.status));
+    if (!nutrition?.used) return `<p class="hint">Nährwerte noch nicht berechenbar${open.length?` · ${open.length} ${open.length===1?'Zutat':'Zutaten'} offen`:''}.</p>`;
+    const format=values=>`${pretty(Math.round(values.kcal))} kcal · ${pretty(Math.round(values.protein))} g Protein · ${pretty(Math.round(values.carbs))} g Kohlenhydrate · ${pretty(Math.round(values.fat))} g Fett`;
+    const missing=open.length ? ` · ${open.length} ${open.length===1?'Zutat':'Zutaten'} fehlt` + (open.length===1?'':'en') : '';
+    const groups=[['amount','Menge fehlt'],['mapping','Nicht zugeordnet'],['weight','Gewicht fehlt']]
+      .map(([status,label])=>[label,open.filter(item=>item.status===status).map(item=>item.name)]).filter(([,names])=>names.length);
     return `<p class="hint"><strong>Pro Portion${missing?' · unvollständig':''}</strong><br>${format(nutrition.portion)}</p>
       ${showTotal?`<p class="hint"><strong>Gesamtgericht${missing?' · unvollständig':''}</strong><br>${format(nutrition.total)}</p>
-      ${missing?`<p class="hint">Menge oder Zuordnung fehlt: ${esc(nutrition.missing.join(', '))}</p>`:''}`:''}`;
+      ${groups.map(([label,names])=>`<p class="hint">${label}: ${esc(names.join(', '))}</p>`).join('')}`:''}`;
   }
-  async openNutrition(id, trigger) {
-    if (!this.data.modules?.nutrition || this._saving) return;
-    const recipe=this.data.recipes[id], revision=this.data.revision;
-    if (!recipe?.ingredients.length) return;
+  ingredientKey(name) {
+    // Mirrors nutrition.key() in Python: casefold, strip accents, keep a-z/0-9 words.
+    return (String(name ?? '').replace(/ß/g,'ss').toLowerCase().normalize('NFKD')
+      .replace(/[^\x00-\x7f]/g,'').match(/[a-z0-9]+/g) || []).join(' ');
+  }
+  ingredientEntry(name) {
+    const key=this.ingredientKey(name);
+    const generic={el:{grams:'10',source:'generic'},tl:{grams:'4',source:'generic'},prise:{grams:'0.3',source:'generic'},ml:{grams:'1',source:'generic'}};
+    return (this.data.ingredient_list || []).find(entry=>entry.key===key) || {key,name,recipes:0,units:[],status:'open',
+      ignore:false,nutrition:null,label:'',weights:generic,defaults:generic};
+  }
+  // The state of one ingredient as the dialogs show it: saved entry plus not yet saved edits.
+  ingredientView(entry, staged) {
+    const change=staged.get(entry.key);
+    if (!change) return entry;
+    const weights={...(entry.defaults||{})};
+    for (const [unit,grams] of Object.entries(change.raw.weights||{})) weights[unit]={grams,source:'own'};
+    return {...entry, nutrition:change.raw.nutrition, label:change.label, ignore:change.raw.ignore,
+      status:change.raw.ignore?'ignored':change.raw.nutrition?'mapped':'open', weights};
+  }
+  ownWeights(view) {
+    return Object.fromEntries(Object.entries(view.weights).filter(([,w])=>w.source==='own').map(([unit,w])=>[unit,w.grams]));
+  }
+  stageSuggestion(staged, entry, view, suggestion) {
+    staged.set(entry.key,{raw:{name:entry.name,nutrition:{code:suggestion.code},weights:this.ownWeights(view),ignore:false},
+      label:suggestion.name});
+  }
+  amountStatus(item, view, useList=false) {
+    const units={g:1,kg:1000};
+    const override=!useList && item.nutrition;
+    if (!override && view.ignore) return {status:'ignored',text:'zählt nicht'};
+    if (item.quantity===null || item.quantity==='' || item.quantity===undefined) {
+      if (override?.grams) return {status:'ok',grams:Number(override.grams)};
+      return {status:'amount',text:'Menge fehlt'};
+    }
+    const quantity=Number(String(item.quantity).replace(',','.'));
+    if (!Number.isFinite(quantity) || quantity<=0) return {status:'amount',text:'Menge prüfen'};
+    const unit=item.unit || 'stück';
+    const density=Number(view.weights.ml?.grams || 1);
+    let grams;
+    if (units[unit]) grams=quantity*units[unit];
+    else if (unit==='ml' || unit==='l') grams=quantity*(unit==='l'?1000:1)*density;
+    else if (view.weights[unit]) grams=quantity*Number(view.weights[unit].grams);
+    else return {status:'weight',text:`Gewicht pro ${this.unitLabel(unit)} fehlt`};
+    if (!override && !view.nutrition) return {status:'mapping',grams,text:'nicht zugeordnet'};
+    return {status:'ok',grams};
+  }
+  unitLabel(unit) {
+    return {'':'–',g:'g',kg:'kg',ml:'ml',l:'l','stück':'Stück',el:'EL',tl:'TL',prise:'Prise',bund:'Bund',dose:'Dose'}[unit] ?? unit;
+  }
+  weightText(view) {
+    const parts=Object.entries(view.weights).filter(([unit,w])=>w.source!=='generic' && unit!=='ml' &&
+      (view.units.includes(unit) || w.source==='own')).map(([unit,w])=>`1 ${this.unitLabel(unit)} = ${pretty(Number(w.grams))} g`);
+    return parts.join(' · ');
+  }
+  async ingredientSuggestions(names) {
+    const result=new Map();
+    for (let start=0; start<names.length; start+=100) {
+      const chunk=names.slice(start,start+100);
+      const lists=await this._hass.callWS({type:'essensplan/nutrition_search',queries:chunk});
+      chunk.forEach((name,index)=>result.set(this.ingredientKey(name),lists[index]));
+    }
+    return result;
+  }
+  // Editor for one ingredient; used by the ingredient list and the amounts table.
+  ingredientPanel(entry, staged, suggestions, onApply, onCancel) {
+    const view=this.ingredientView(entry, staged);
+    const panel=document.createElement('div');
+    panel.className='ing-panel';
+    const fields=[['kcal','Energie (kcal)'],['protein','Protein (g)'],['carbs','Kohlenhydrate (g)'],['fat','Fett (g)']];
+    const weightUnits=['stück','el','tl','bund','dose','prise'];
+    const relevant=weightUnits.filter(unit=>entry.units.includes(unit) || (unit==='stück' && entry.units.includes('')));
+    const others=weightUnits.filter(unit=>!relevant.includes(unit));
+    const own=this.ownWeights(view);
+    const weightInput=unit=>{
+      const fallback=(entry.defaults||entry.weights)[unit];
+      const hint=fallback && fallback.source!=='own' ? `${pretty(Number(fallback.grams))} g (${fallback.source==='default'?'Standard':'allgemein'})` : 'fehlt';
+      const label=unit==='ml' ? 'Gramm pro ml (Dichte)' : `Gramm pro ${this.unitLabel(unit)}`;
+      return `<label>${label}<input data-weight="${unit}" inputmode="decimal" value="${esc(own[unit] ?? '')}" placeholder="${esc(hint)}"></label>`;
+    };
+    let product=view.nutrition?.product;
+    panel.innerHTML=`<label class="check-line"><input type="checkbox" data-ignore ${view.ignore?'checked':''}>
+        Zählt nicht für Nährwerte (z. B. Gewürze, Wasser)</label>
+      <div data-mapping>
+        <div class="search-line"><label>Lebensmittel suchen<input type="search" maxlength="200" value="${esc(entry.name)}"></label>
+          <button type="button" data-search>Suchen</button></div>
+        <div class="choice-list" role="radiogroup" aria-label="Lebensmittel für ${esc(entry.name)}"></div>
+        <p class="hint" data-result role="status"></p>
+        <fieldset class="weights"><legend>Gewicht pro Einheit</legend>
+          <p class="hint">Damit rechnen Mengen wie „2 Stück“ oder „1 EL“. Leer lassen übernimmt den Vorschlag.</p>
+          <div class="weight-grid">${(relevant.length?relevant:['stück']).map(weightInput).join('')}</div>
+          <details><summary>Weitere Einheiten</summary><div class="weight-grid">${others.filter(u=>relevant.length||u!=='stück').map(weightInput).join('')}${weightInput('ml')}</div></details>
+        </fieldset>
+        <details data-more><summary>Eigene Werte oder Barcode</summary>
+          <label class="check-line"><input type="radio" name="choice-${esc(entry.key)}" value="manual"> Eigene Werte pro 100 g</label>
+          <div data-manual class="weight-grid">${fields.map(([k,l])=>`<label>${l}<input name="${k}" inputmode="decimal" value="${esc(view.nutrition?.values?.[k] ?? '')}"></label>`).join('')}</div>
+          <div data-barcode-box></div>
+        </details>
+      </div>
+      <p class="hint" data-panel-error role="alert"></p>
+      <div class="actions"><button type="button" class="primary" data-apply>Übernehmen</button><button type="button" data-cancel>Abbrechen</button></div>`;
+    const list=panel.querySelector('.choice-list'), feedback=panel.querySelector('[data-result]');
+    const ignore=panel.querySelector('[data-ignore]'), mapping=panel.querySelector('[data-mapping]');
+    const manualRadio=panel.querySelector('[value=manual]'), more=panel.querySelector('[data-more]');
+    const group=`choice-${entry.key}`;
+    const current=()=>panel.querySelector(`input[name="${CSS.escape(group)}"]:checked`)?.value || '';
+    const labels=new Map();
+    const fill=(choices,selected=current())=>{
+      const options=[...choices];
+      if (view.nutrition?.code && !options.some(c=>c.code===view.nutrition.code)) options.unshift({code:view.nutrition.code,name:view.label||view.nutrition.code});
+      list.replaceChildren(...options.map(choice=>{
+        labels.set(choice.code,choice.name);
+        const label=document.createElement('label');
+        label.className='check-line choice';
+        label.innerHTML=`<input type="radio" name="${esc(group)}" value="${esc(choice.code)}"> <span>${esc(choice.name)}</span>`;
+        return label;
+      }));
+      if (product) {
+        const label=document.createElement('label');
+        label.className='check-line choice';
+        label.innerHTML=`<input type="radio" name="${esc(group)}" value="product"> <span>${esc(product.name)} · pro ${product.basis==='100ml'?'100 ml':'100 g'}</span>`;
+        list.append(label);
+      }
+      const none=document.createElement('label');
+      none.className='check-line choice';
+      none.innerHTML=`<input type="radio" name="${esc(group)}" value=""> <span>Noch offen lassen</span>`;
+      list.append(none);
+      const pick=selected || (choices[0]?.code ?? '');
+      const radio=panel.querySelector(`input[name="${CSS.escape(group)}"][value="${CSS.escape(pick)}"]`);
+      if (radio) radio.checked=true;
+      if (pick==='manual') more.open=true;
+      feedback.textContent=choices.length?'':'Keine Treffer. Suche anders oder gib eigene Werte ein.';
+    };
+    const initial=view.nutrition?.product ? 'product' : view.nutrition?.code || (view.nutrition?.values ? 'manual' : '');
+    fill(suggestions.get(entry.key) || [], initial);
+    if (initial==='manual') manualRadio.checked=true;
+    const display=()=>{mapping.hidden=ignore.checked;};
+    ignore.onchange=display; display();
+    const search=panel.querySelector('[type=search]'), searchButton=panel.querySelector('[data-search]');
+    searchButton.onclick=async()=>{
+      searchButton.disabled=true; feedback.textContent='Suche läuft …';
+      try {const [results]=await this._hass.callWS({type:'essensplan/nutrition_search',queries:[search.value]});fill(results,'');}
+      catch(err) {feedback.textContent=err.message || 'Suche fehlgeschlagen.';}
+      finally {searchButton.disabled=false;}
+    };
+    search.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();searchButton.click();}};
+    this.barcodeBox(panel.querySelector('[data-barcode-box]'), match=>{
+      product=match.product;
+      for (const [k] of fields) panel.querySelector(`[name=${k}]`).value=match.values[k];
+      fill([...list.querySelectorAll('input')].map(i=>i.value).filter(v=>v && v!=='product' && v!=='manual')
+        .map(code=>({code,name:labels.get(code)})),'product');
+    });
+    panel.querySelector('[data-cancel]').onclick=()=>{this._barcodeStop?.();onCancel();};
+    panel.querySelector('[data-apply]').onclick=()=>{
+      const error=panel.querySelector('[data-panel-error]');
+      const weights={};
+      for (const input of panel.querySelectorAll('[data-weight]')) {
+        const value=input.value.trim().replace(',','.');
+        if (!value) continue;
+        if (!(Number(value)>0)) {error.textContent=`Bitte ein Gewicht größer als 0 eingeben (${this.unitLabel(input.dataset.weight)}).`;input.focus();return;}
+        weights[input.dataset.weight]=value;
+      }
+      const choice=current();
+      let nutrition=null, label='';
+      if (choice==='manual' || choice==='product') {
+        const values=Object.fromEntries(fields.map(([k])=>[k,panel.querySelector(`[name=${k}]`).value.trim().replace(',','.')]));
+        if (Object.values(values).some(v=>v==='' || !Number.isFinite(Number(v)))) {error.textContent='Bitte alle vier Werte pro 100 g eingeben.';more.open=true;return;}
+        nutrition=choice==='product'?{values,product}:{values};
+        label=choice==='product'?product.name:'Eigene Werte';
+      } else if (choice) {
+        nutrition={code:choice}; label=labels.get(choice) || choice;
+      }
+      this._barcodeStop?.();
+      onApply({raw:{name:entry.name,nutrition,weights,ignore:ignore.checked},label});
+    };
+    return panel;
+  }
+  barcodeBox(box, onProduct) {
+    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.14.0');
+    box.innerHTML=`<p class="hint">Der Scan läuft lokal. Beim Nachschlagen wird nur der Barcode an Open Food Facts gesendet.</p>
+      <div class="actions"><button type="button" data-camera>Barcode scannen</button>
+        <button type="button" data-photo>Barcode-Foto</button><button type="button" data-stop hidden>Kamera schließen</button></div>
+      <video class="barcode-video" autoplay playsinline muted hidden></video>
+      <input type="file" accept="image/*" capture="environment" hidden>
+      <div class="search-line"><label>EAN / UPC<input data-barcode inputmode="numeric" maxlength="14"></label>
+        <button type="button" data-lookup>Produkt nachschlagen</button></div><p data-barcode-status class="hint" role="status"></p>`;
+    const stopCamera=()=>{this._barcodeStop?.();this._barcodeStop=null;};
+    const video=box.querySelector('video'), stop=box.querySelector('[data-stop]');
+    const barcode=box.querySelector('[data-barcode]'), status=box.querySelector('[data-barcode-status]');
+    const camera=box.querySelector('[data-camera]'), file=box.querySelector('[type=file]');
+    const found=code=>{
+      if (!box.isConnected) return;
+      stopCamera();
+      barcode.value=code;
+      status.textContent='Barcode erkannt. Tippe auf „Produkt nachschlagen“.';
+      barcode.focus();
+    };
+    const openPhoto=()=>{stopCamera();file.click();};
+    let usePhoto=!navigator.mediaDevices?.getUserMedia;
+    if (usePhoto) camera.textContent='Barcode fotografieren';
+    camera.onclick=async()=>{
+      if (usePhoto) {openPhoto();return;}
+      stopCamera();
+      const controller=new AbortController();
+      let stream;
+      this._barcodeStop=()=>{
+        controller.abort();
+        stream?.getTracks().forEach(track=>track.stop());
+        video.hidden=stop.hidden=true;
+        camera.disabled=false;
+      };
+      camera.disabled=true; stop.hidden=false;
+      status.textContent='Kamera wird geöffnet …';
+      try {
+        // Ask before loading the decoder so the request starts in the tap handler.
+        stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+        if (controller.signal.aborted) {stream.getTracks().forEach(track=>track.stop());return;}
+        const decoder=await scanner();
+        if (controller.signal.aborted) return;
+        video.hidden=false;
+        status.textContent='Halte den Barcode in die Kamera.';
+        await decoder.scanCamera(stream,video,controller.signal,found);
+      } catch(err) {
+        if (controller.signal.aborted) return;
+        stopCamera();
+        usePhoto=true;
+        camera.textContent='Barcode fotografieren';
+        status.textContent=err.name==='NotAllowedError'
+          ? 'Kamerazugriff verweigert. Tippe auf „Barcode fotografieren“ oder gib den Code ein.'
+          : 'Live-Kamera konnte nicht gestartet werden. Tippe auf „Barcode fotografieren“ oder gib den Code ein.';
+        camera.focus();
+      }
+    };
+    stop.onclick=stopCamera;
+    box.querySelector('[data-photo]').onclick=openPhoto;
+    file.onchange=async()=>{
+      const image=file.files[0];
+      file.value='';
+      if (!image) return;
+      status.textContent='Barcode wird lokal gelesen …';
+      try {found(await (await scanner()).scanPhoto(image));}
+      catch(err) {status.textContent=err.message;}
+    };
+    const lookup=box.querySelector('[data-lookup]');
+    lookup.onclick=async()=>{
+      lookup.disabled=true;
+      status.textContent='Produkt wird gesucht …';
+      try {
+        const match=await this._hass.callWS({type:'essensplan/barcode_lookup',barcode:barcode.value.trim()});
+        onProduct(match);
+        status.textContent=`${match.product.name} gefunden. Prüfe die Angaben pro ${match.product.basis==='100ml'?'100 ml':'100 g'}.`;
+      } catch(err) {status.textContent=err.message || 'Produktabruf fehlgeschlagen.';}
+      finally {lookup.disabled=false;}
+    };
+    barcode.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();lookup.click();}};
+  }
+  ingredientDialog(title) {
     const root=this.shadowRoot;
     this._barcodeStop?.();
     root.querySelector('dialog')?.remove();
     const dialog=document.createElement('dialog');
-    dialog.setAttribute('aria-label','Nährwerte zuordnen');
-    dialog.innerHTML=`<h2>Nährwerte zuordnen</h2><p>${esc(recipe.name)}</p>
-      <p class="hint">Prüfe, ob das Lebensmittel zur Zutat passt, besonders roh oder gekocht.
-      Für Nährwerte pro 100 g kannst du bei Bedarf das Gesamtgewicht angeben.</p>
-      <p class="hint">Der Scan läuft lokal. Beim Produktabruf wird nur der Barcode an Open Food Facts gesendet.</p>
-      <form><div class="nutrition-rows"></div><p role="status" class="hint"></p>
-      <div class="actions"><button type="submit" disabled>Zuordnungen speichern</button><button type="button" data-close>Abbrechen</button></div></form>
-      <p class="hint">Quellen: Bundeslebensmittelschlüssel 4.0 (CC BY 4.0) und Open Food Facts (ODbL).</p>`;
-    const form=dialog.querySelector('form'), save=form.querySelector('[type=submit]'), status=form.querySelector('[role=status]');
-    const fields=[['kcal','Energie (kcal)'],['protein','Protein (g)'],['carbs','Kohlenhydrate (g)'],['fat','Fett (g)']];
-    const search=queries=>this._hass.callWS({type:'essensplan/nutrition_search',queries});
-    const stopCamera=()=>{
-      this._barcodeStop?.();
-      this._barcodeStop=null;
-    };
-    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.13.0');
-    const rows=recipe.ingredients.map(item=>{
-      const assigned=item.nutrition || {};
-      let product=assigned.product;
-      const row=document.createElement('fieldset');
-      row.innerHTML=`<legend>${esc(item.name)}${item.quantity?` · ${esc(item.quantity)} ${esc(item.unit)}`:''}</legend>
-        <div class="actions"><button type="button" data-camera>Barcode scannen</button>
-          <button type="button" data-photo>Barcode-Foto</button><button type="button" data-stop hidden>Kamera schließen</button></div>
-        <video class="barcode-video" autoplay playsinline muted hidden></video>
-        <input type="file" accept="image/*" capture="environment" hidden>
-        <label>EAN / UPC<input data-barcode inputmode="numeric" maxlength="14" value="${esc(product?.barcode ?? '')}"></label>
-        <button type="button" data-lookup>Produkt nachschlagen</button><p data-barcode-status class="hint" role="status"></p>
-        <label>Lebensmittel suchen<input type="search" maxlength="200" value="${esc(item.name)}"></label>
-        <button type="button" data-search>Suchen</button>
-        <label>Zuordnung<select><option value="">Offen lassen</option><option value="manual">Eigene Werte pro 100 g</option></select></label>
-        <p data-result class="hint" role="status"></p>
-        <div data-manual hidden>${fields.map(([key,label])=>`<label>${label}<input name="${key}" inputmode="decimal" value="${esc(assigned.values?.[key] ?? '')}"></label>`).join('')}</div>
-        <label>Gesamtgewicht dieser Zutat in Gramm (optional)<input name="grams" inputmode="decimal" value="${esc(assigned.grams ?? '')}"></label>`;
-      const select=row.querySelector('select'), feedback=row.querySelector('[data-result]');
-      const manual=row.querySelector('[data-manual]');
-      const grams=row.querySelector('[name=grams]');
-      const display=()=>{
-        manual.hidden=!['manual','product'].includes(select.value);
-        for (const input of manual.querySelectorAll('input')) input.required=!manual.hidden;
-        grams.disabled=select.value==='product' && product?.basis==='100ml';
-        grams.closest('label').hidden=grams.disabled;
-      };
-      const fill=(choices,current=select.value)=>{
-        const options=choices.map(choice=>new Option(choice.name,choice.code));
-        if (current && !['manual','product'].includes(current) && !choices.some(choice=>choice.code===current)) {
-          options.push(new Option(`Gespeicherter BLS-Eintrag (${current})`,current));
-        }
-        select.replaceChildren(new Option('Offen lassen',''), ...options, new Option('Eigene Werte pro 100 g','manual'));
-        if (product) select.add(new Option(`${product.name} · pro ${product.basis==='100ml'?'100 ml':'100 g'}`,'product'));
-        select.value=current;
-        display();
-        feedback.textContent=choices.length?`${choices.length} Vorschläge`:'Keine Treffer. Suche anders oder gib eigene Werte ein.';
-      };
-      let choices=[];
-      const updateChoices=(next,current=select.value)=>{choices=next;fill(next,current);};
-      fill([],assigned.code || (product?'product':assigned.values?'manual':''));
-      const video=row.querySelector('video'), stop=row.querySelector('[data-stop]');
-      const barcode=row.querySelector('[data-barcode]'), barcodeStatus=row.querySelector('[data-barcode-status]');
-      const camera=row.querySelector('[data-camera]'), file=row.querySelector('[type=file]');
-      const found=code=>{
-        if (!dialog.isConnected || !dialog.open) return;
-        stopCamera();
-        barcode.value=code;
-        barcodeStatus.textContent='Barcode erkannt. Tippe auf „Produkt nachschlagen“.';
-        barcode.focus();
-      };
-      const openPhoto=()=>{stopCamera();file.click();};
-      let usePhoto=!navigator.mediaDevices?.getUserMedia;
-      if (usePhoto) camera.textContent='Barcode fotografieren';
-      camera.onclick=async()=>{
-        if (usePhoto) {
-          openPhoto();
-          return;
-        }
-        stopCamera();
-        const controller=new AbortController();
-        let stream;
-        this._barcodeStop=()=>{
-          controller.abort();
-          stream?.getTracks().forEach(track=>track.stop());
-          video.hidden=stop.hidden=true;
-          camera.disabled=false;
-        };
-        camera.disabled=true;
-        stop.hidden=false;
-        barcodeStatus.textContent='Kamera wird geöffnet …';
-        try {
-          // Ask before loading the decoder so the request starts in the tap handler.
-          stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
-          if (controller.signal.aborted) {
-            stream.getTracks().forEach(track=>track.stop());
-            return;
-          }
-          const decoder=await scanner();
-          if (controller.signal.aborted) return;
-          video.hidden=false;
-          barcodeStatus.textContent='Halte den Barcode in die Kamera.';
-          await decoder.scanCamera(stream,video,controller.signal,found);
-        } catch(err) {
-          if (controller.signal.aborted) return;
-          stopCamera();
-          usePhoto=true;
-          camera.textContent='Barcode fotografieren';
-          barcodeStatus.textContent=err.name==='NotAllowedError'
-            ? 'Kamerazugriff verweigert. Tippe auf „Barcode fotografieren“ oder gib den Code ein.'
-            : 'Live-Kamera konnte nicht gestartet werden. Tippe auf „Barcode fotografieren“ oder gib den Code ein.';
-          camera.focus();
-        }
-      };
-      stop.onclick=stopCamera;
-      row.querySelector('[data-photo]').onclick=openPhoto;
-      file.onchange=async()=>{
-        const image=file.files[0];
-        file.value='';
-        if (!image) return;
-        barcodeStatus.textContent='Barcode wird lokal gelesen …';
-        try {found(await (await scanner()).scanPhoto(image));}
-        catch(err) {barcodeStatus.textContent=err.message;}
-      };
-      const lookup=row.querySelector('[data-lookup]');
-      lookup.onclick=async()=>{
-        lookup.disabled=true;
-        barcodeStatus.textContent='Produkt wird gesucht …';
-        try {
-          const match=await this._hass.callWS({type:'essensplan/barcode_lookup',barcode:barcode.value.trim()});
-          product=match.product;
-          for (const [key] of fields) row.querySelector(`[name=${key}]`).value=match.values[key];
-          fill(choices,'product');
-          barcodeStatus.textContent=`${product.name} gefunden. Prüfe die Angaben pro ${product.basis==='100ml'?'100 ml':'100 g'} und speichere die Zuordnung.`;
-        } catch(err) {barcodeStatus.textContent=err.message || 'Produktabruf fehlgeschlagen.';}
-        finally {lookup.disabled=false;}
-      };
-      barcode.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();lookup.click();}};
-      select.onchange=display;
-      const button=row.querySelector('[data-search]'), input=row.querySelector('[type=search]');
-      button.onclick=async()=>{
-        button.disabled=true;
-        try {const [results]=await search([input.value]);updateChoices(results);}
-        catch (err) {feedback.textContent=err.message || 'Suche fehlgeschlagen.';}
-        finally {button.disabled=false;}
-      };
-      input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();button.click();}};
-      form.querySelector('.nutrition-rows').append(row);
-      return {row,select,fill:updateChoices,getProduct:()=>product};
-    });
-    form.onsubmit=async event=>{
-      event.preventDefault();
-      stopCamera();
-      const assignments=rows.map(({row,select,getProduct})=>{
-        if (!select.value) return null;
-        const grams=row.querySelector('[name=grams]').value.trim();
-        if (!['manual','product'].includes(select.value)) return {code:select.value,grams};
-        const values=Object.fromEntries(fields.map(([key])=>[key,row.querySelector(`[name=${key}]`).value.trim()]));
-        return select.value==='product'?{values,grams,product:getProduct()}:{values,grams};
-      });
-      save.disabled=true;
-      if (!(await this.change('set_nutrition',{id,assignments},revision))) {
-        status.textContent=this._error;
-        save.disabled=false;
-      }
-    };
-    dialog.querySelector('[data-close]').onclick=()=>dialog.close();
-    dialog.addEventListener('close',()=>{stopCamera();dialog.remove();if(trigger?.isConnected)trigger.focus();});
+    dialog.className='wide';
+    dialog.setAttribute('aria-label',title);
     root.append(dialog);
+    return dialog;
+  }
+  async openIngredients(trigger) {
+    if (!this.data.modules?.nutrition || this._saving) return;
+    const dialog=this.ingredientDialog('Zutaten & Nährwerte');
+    const staged=new Map();
+    let suggestions=new Map(), filter='open', query='', openKey=null, focusPanel=false;
+    const entries=()=>this.data.ingredient_list || [];
+    dialog.innerHTML=`<h2>Zutaten &amp; Nährwerte</h2>
+      <p class="hint">Jede Zutat wird einmal zugeordnet und gilt dann in allen Rezepten. Häufige Zutaten stehen oben.</p>
+      <p class="ing-summary" data-summary aria-live="polite"></p>
+      <div class="row"><label style="flex:1">Zutat suchen<input type="search" data-filter-text placeholder="z. B. Zwiebel"></label>
+        <div class="actions" role="group" aria-label="Filter"><button type="button" data-filter="open">Offen</button><button type="button" data-filter="all">Alle</button></div></div>
+      <div class="ing-list"></div>
+      <p class="hint" role="status" data-status></p>
+      <div class="actions sticky-actions"><button type="button" data-bulk>Alle Vorschläge übernehmen</button>
+        <button type="button" class="primary" data-save disabled>Speichern</button><button type="button" data-close>Schließen</button></div>
+      <p class="hint">Quellen: Bundeslebensmittelschlüssel 4.0 (CC BY 4.0) und Open Food Facts (ODbL).</p>`;
+    const list=dialog.querySelector('.ing-list'), status=dialog.querySelector('[data-status]');
+    const save=dialog.querySelector('[data-save]'), bulk=dialog.querySelector('[data-bulk]');
+    const suggestionFor=view=>view.status==='open' ? (suggestions.get(view.key) || [])[0] : null;
+    const rowFor=entry=>{
+      const view=this.ingredientView(entry, staged);
+      const row=document.createElement('div');
+      row.className=`ing-row ${view.status}${staged.has(entry.key)?' changed':''}`;
+      row.dataset.key=entry.key;
+      const suggestion=suggestionFor(view);
+      const weights=this.weightText(view);
+      const usage=`${entry.recipes} ${entry.recipes===1?'Rezept':'Rezepte'}${entry.unmeasured?` · ${entry.unmeasured}× ohne Menge`:''}`;
+      const state=view.status==='mapped' ? `<span class="ok">✓ ${esc(view.label)}</span>${weights?`<small>${esc(weights)}</small>`:''}`
+        : view.status==='ignored' ? '<span class="muted">Zählt nicht</span>'
+        : suggestion ? `<span>Vorschlag: <strong>${esc(suggestion.name)}</strong></span>`
+        : '<span class="warn">Kein Vorschlag – bitte suchen</span>';
+      row.innerHTML=`<div class="ing-head"><div class="ing-name"><strong>${esc(view.name)}</strong><small>${esc(usage)}</small></div>
+        <div class="ing-state">${state}</div>
+        <div class="actions">${suggestion?`<button type="button" class="primary" data-accept>Übernehmen</button>`:''}
+          <button type="button" data-edit aria-expanded="${openKey===entry.key}">${view.status==='open'&&!suggestion?'Zuordnen':'Ändern'}</button></div></div>`;
+      row.querySelector('[data-accept]')?.addEventListener('click',()=>{this.stageSuggestion(staged,entry,view,suggestion);draw();});
+      row.querySelector('[data-edit]').onclick=()=>{openKey=openKey===entry.key?null:entry.key;focusPanel=Boolean(openKey);draw();};
+      if (openKey===entry.key) {
+        row.append(this.ingredientPanel(entry, staged, suggestions, change=>{staged.set(entry.key,change);openKey=null;draw();},
+          ()=>{openKey=null;draw();}));
+      }
+      return row;
+    };
+    const draw=()=>{
+      const all=entries().map(entry=>this.ingredientView(entry, staged));
+      const mapped=all.filter(v=>v.status==='mapped').length, ignored=all.filter(v=>v.status==='ignored').length;
+      const open=all.length-mapped-ignored;
+      const uses=all.reduce((sum,v)=>sum+v.recipes,0), covered=all.filter(v=>v.status!=='open').reduce((sum,v)=>sum+v.recipes,0);
+      dialog.querySelector('[data-summary]').textContent=`${mapped} von ${all.length} Zutaten zugeordnet · ${ignored} zählen nicht · ${open} offen`+
+        (uses?` · deckt ${Math.round(100*covered/uses)} % der Zutaten in euren Rezepten ab`:'');
+      for (const button of dialog.querySelectorAll('[data-filter]')) button.setAttribute('aria-pressed',String(button.dataset.filter===filter));
+      const text=this.ingredientKey(query);
+      const shown=entries().filter(entry=>{
+        const view=this.ingredientView(entry, staged);
+        return (filter==='all' || view.status==='open' || staged.has(entry.key) || openKey===entry.key) && (!text || entry.key.includes(text));
+      });
+      list.replaceChildren(...shown.map(rowFor));
+      if (!shown.length) list.innerHTML=`<p class="muted">${filter==='open'?'Alles zugeordnet. Unter „Alle“ kannst du Zuordnungen ändern.':'Keine passende Zutat.'}</p>`;
+      const pending=shown.filter(entry=>suggestionFor(this.ingredientView(entry, staged)));
+      bulk.hidden=!pending.length;
+      bulk.textContent=`Alle Vorschläge übernehmen (${pending.length})`;
+      bulk.onclick=()=>{
+        for (const entry of pending) {
+          const view=this.ingredientView(entry, staged);
+          this.stageSuggestion(staged, entry, view, suggestionFor(view));
+        }
+        status.textContent=`${pending.length} Vorschläge übernommen. Prüfe die Liste und speichere.`;
+        draw();
+      };
+      save.disabled=!staged.size || this._saving;
+      save.textContent=staged.size?`${staged.size} ${staged.size===1?'Änderung':'Änderungen'} speichern`:'Speichern';
+      const focus=focusPanel && openKey && list.querySelector(`[data-key="${CSS.escape(openKey)}"] .ing-panel input[type=search]`);
+      if (focus) {focus.focus();focus.scrollIntoView({block:'nearest'});}
+      focusPanel=false;
+    };
+    dialog.querySelector('[data-filter-text]').oninput=event=>{query=event.target.value;draw();};
+    for (const button of dialog.querySelectorAll('[data-filter]')) button.onclick=()=>{filter=button.dataset.filter;draw();};
+    save.onclick=async()=>{
+      save.disabled=true;
+      status.textContent='Wird gespeichert …';
+      if (await this.change('set_ingredients',{items:[...staged.values()].map(change=>change.raw)})) return;
+      status.textContent=this._error;
+      save.disabled=false;
+    };
+    dialog.querySelector('[data-close]').onclick=()=>{
+      if (staged.size && !confirm('Nicht gespeicherte Zuordnungen verwerfen?')) return;
+      dialog.close();
+    };
+    dialog.addEventListener('cancel',event=>{if(staged.size && !confirm('Nicht gespeicherte Zuordnungen verwerfen?')) event.preventDefault();});
+    dialog.addEventListener('close',()=>{this._barcodeStop?.();dialog.remove();if(trigger?.isConnected)trigger.focus();});
+    if (!entries().some(entry=>entry.status==='open')) filter='all';
+    draw();
     dialog.showModal();
     status.textContent='Vorschläge werden geladen …';
     try {
-      const results=await search(recipe.ingredients.map(item=>item.name));
-      results.forEach((choices,index)=>rows[index].fill(choices));
+      suggestions=await this.ingredientSuggestions(entries().filter(entry=>entry.status==='open').map(entry=>entry.name));
       status.textContent='';
-    } catch (err) {
-      status.textContent=err.message || 'Vorschläge konnten nicht geladen werden.';
-    } finally {save.disabled=false;}
+    } catch(err) {status.textContent=err.message || 'Vorschläge konnten nicht geladen werden.';}
+    if (dialog.isConnected) draw();
+  }
+  async openAmounts(id, trigger) {
+    if (!this.data.modules?.nutrition || this._saving) return;
+    const recipe=this.data.recipes[id], revision=this.data.revision;
+    if (!recipe?.ingredients.length) return;
+    const dialog=this.ingredientDialog('Mengen & Nährwerte');
+    const staged=new Map();
+    let suggestions=new Map(), openIndex=null;
+    const units=['','g','kg','ml','l','stück','el','tl','prise','bund','dose'];
+    const items=recipe.ingredients.map(item=>({...item, useList:false}));
+    dialog.innerHTML=`<h2>Mengen &amp; Nährwerte</h2><p><strong>${esc(recipe.name)}</strong> · ${pretty(Number(recipe.servings))} Portionen</p>
+      <p class="hint">Trage Mengen ein. Stück, EL und TL werden über das Gewicht der Zutat in Gramm umgerechnet.</p>
+      <p class="ing-summary" data-summary aria-live="polite"></p>
+      <form><div class="amount-table"></div><p role="status" class="hint" data-status></p>
+      <div class="actions sticky-actions"><button type="submit" class="primary">Speichern</button><button type="button" data-close>Abbrechen</button>
+        <button type="button" data-all-ingredients>Alle Zutaten …</button></div></form>`;
+    const table=dialog.querySelector('.amount-table'), form=dialog.querySelector('form'), status=dialog.querySelector('[data-status]');
+    const describe=(item,view,info)=>{
+      const grams=info.grams!==undefined?`≈ ${pretty(Math.round(info.grams))} g`:'';
+      if (info.status==='ignored') return `<span class="muted">zählt nicht</span>`;
+      if (info.status==='ok') {
+        const source=item.nutrition && !item.useList ? 'eigene Zuordnung im Rezept' : view.label;
+        return `<span class="ok">✓ ${grams}</span> <small>${esc(source)}</small>`;
+      }
+      if (info.status==='mapping') {
+        const suggestion=(suggestions.get(view.key)||[])[0];
+        return `${grams?`<small>${grams}</small> `:''}<span class="warn">nicht zugeordnet</span>${suggestion?
+          ` <button type="button" class="link" data-accept>Übernehmen: ${esc(suggestion.name)}</button>`:''}`;
+      }
+      return `<span class="warn">${esc(info.text)}</span>`;
+    };
+    const draw=()=>{
+      let complete=0, ignored=0;
+      table.replaceChildren(...items.map((item,index)=>{
+        const entry=this.ingredientEntry(item.name), view=this.ingredientView(entry, staged);
+        const info=this.amountStatus(item, view, item.useList);
+        if (info.status==='ok') complete++;
+        if (info.status==='ignored') ignored++;
+        const row=document.createElement('div');
+        row.className=`amount-row ${info.status}`;
+        row.innerHTML=`<input aria-label="Menge ${esc(item.name)}" data-qty inputmode="decimal" value="${esc(item.quantity==null?'':String(item.quantity).replace('.',','))}" placeholder="Menge">
+          <select aria-label="Einheit ${esc(item.name)}" data-unit>${units.map(u=>`<option value="${u}"${(item.unit||'')===u?' selected':''}>${this.unitLabel(u)}</option>`).join('')}</select>
+          <div class="amount-name"><strong>${esc(item.name)}</strong><div class="amount-state">${describe(item,view,info)}</div></div>
+          <button type="button" data-edit aria-expanded="${openIndex===index}" aria-label="${esc(item.name)} zuordnen">${info.status==='weight'?'Gewicht':'Zuordnen'}</button>`;
+        if (item.nutrition && !item.useList) {
+          const reset=document.createElement('label');
+          reset.className='check-line amount-reset';
+          reset.innerHTML='<input type="checkbox"> Zuordnung aus der Zutatenliste verwenden';
+          reset.querySelector('input').onchange=()=>{item.useList=true;draw();};
+          row.append(reset);
+        }
+        const qty=row.querySelector('[data-qty]'), unit=row.querySelector('[data-unit]');
+        qty.oninput=()=>{
+          item.quantity=qty.value.trim()===''?null:qty.value.trim();
+          if (item.quantity===null) item.unit='';
+          refresh(row,index);
+        };
+        unit.onchange=()=>{item.unit=unit.value;refresh(row,index);};
+        row.querySelector('[data-accept]')?.addEventListener('click',()=>{
+          this.stageSuggestion(staged, entry, view, (suggestions.get(view.key)||[])[0]);draw();});
+        row.querySelector('[data-edit]').onclick=()=>{openIndex=openIndex===index?null:index;draw();};
+        if (openIndex===index) {
+          row.append(this.ingredientPanel({...entry, units:[...new Set([...entry.units, item.unit||''])]}, staged, suggestions,
+            change=>{staged.set(entry.key,change);openIndex=null;draw();}, ()=>{openIndex=null;draw();}));
+        }
+        return row;
+      }));
+      const counted=items.length-ignored;
+      dialog.querySelector('[data-summary]').textContent=`${complete} von ${counted} Zutaten vollständig`+(ignored?` · ${ignored} zählen nicht`:'')+
+        (staged.size?` · ${staged.size} Zuordnung${staged.size===1?'':'en'} neu`:'');
+    };
+    // Only the status line changes while typing, so focus stays in the field.
+    const refresh=(row,index)=>{
+      const item=items[index], entry=this.ingredientEntry(item.name), view=this.ingredientView(entry, staged);
+      const info=this.amountStatus(item, view, item.useList);
+      row.className=`amount-row ${info.status}`;
+      row.querySelector('[data-unit]').value=item.unit||'';
+      row.querySelector('.amount-state').innerHTML=describe(item,view,info);
+      row.querySelector('[data-edit]').textContent=info.status==='weight'?'Gewicht':'Zuordnen';
+      row.querySelector('[data-accept]')?.addEventListener('click',()=>{
+        this.stageSuggestion(staged, entry, view, (suggestions.get(view.key)||[])[0]);draw();});
+    };
+    form.onsubmit=async event=>{
+      event.preventDefault();
+      this._barcodeStop?.();
+      const bad=items.findIndex(item=>item.quantity!==null && !(Number(String(item.quantity).replace(',','.'))>0));
+      if (bad>=0) {status.textContent=`Bitte die Menge bei „${items[bad].name}“ prüfen.`;table.children[bad]?.querySelector('[data-qty]')?.focus();return;}
+      const payload={id,items:items.map(item=>({quantity:item.quantity===null?'':String(item.quantity).replace(',','.'),
+        unit:item.quantity===null?'':item.unit||'',...(item.useList?{use_list:true}:{})})),
+        ingredients:[...staged.values()].map(change=>change.raw)};
+      form.querySelector('[type=submit]').disabled=true;
+      status.textContent='Wird gespeichert …';
+      if (!(await this.change('save_amounts',payload,revision))) {
+        status.textContent=this._error;
+        form.querySelector('[type=submit]').disabled=false;
+      }
+    };
+    dialog.querySelector('[data-all-ingredients]').onclick=()=>{
+      if ((staged.size || items.some((item,i)=>item.quantity!==recipe.ingredients[i].quantity || item.unit!==recipe.ingredients[i].unit))
+        && !confirm('Nicht gespeicherte Mengen verwerfen und zur Zutatenliste wechseln?')) return;
+      this.openIngredients(trigger);
+    };
+    dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+    dialog.addEventListener('close',()=>{this._barcodeStop?.();dialog.remove();if(trigger?.isConnected)trigger.focus();});
+    draw();
+    dialog.showModal();
+    const open=[...new Set(items.map(item=>this.ingredientEntry(item.name)).filter(entry=>entry.status==='open').map(entry=>entry.name))];
+    if (open.length) {
+      try {suggestions=await this.ingredientSuggestions(open);}
+      catch(err) {status.textContent=err.message || 'Vorschläge konnten nicht geladen werden.';}
+      if (dialog.isConnected && openIndex===null) draw();
+    }
   }
   recipesHTML() {
     const calendar = '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-9 2v7m-3.5-3.5h7"/>';
     const book = '<path d="M12 6v15M3 5c4-1 7 0 9 2 2-2 5-3 9-2v14c-4-1-7 0-9 2-2-2-5-3-9-2z"/>';
     const bubble = (action, id, label, icon) => `<button class="bubble" data-${action}="${esc(id)}" aria-label="${esc(label)}" title="${esc(label)}"><svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg></button>`;
-    return `<div class="row"><h2>Unsere Rezepte</h2><button class="primary" data-act="new">+ Rezept</button></div>
+    return `<div class="row"><h2>Unsere Rezepte</h2><div class="actions">${this.data.modules?.nutrition?'<button data-ingredients>Zutaten &amp; Nährwerte</button>':''}<button class="primary" data-act="new">+ Rezept</button></div></div>
       <div class="row"><label style="flex:1">Rezepte oder Zutaten suchen<input type="search" id="recipe-search" placeholder="z. B. Paprika" value="${esc(this._recipeSearch || '')}"></label>
       <button type="button" id="favorites-only" aria-pressed="${Boolean(this._favoritesOnly)}">${this._favoritesOnly?'★ Nur Favoriten':'☆ Nur Favoriten'}</button></div>
       <p id="recipe-match-count" class="muted" aria-live="polite"></p>
       <div class="recipe-grid">${Object.values(this.data.recipes).map(r=>`<article class="recipe-card" data-recipe-card="${esc(r.id)}">
       <div class="recipe-media">${this.recipeImage(r)}<div class="bubbles">${bubble('schedule',r.id,`${r.name} einplanen`,calendar)}${bubble('recipe',r.id,`Rezeptdetails: ${r.name}`,book)}</div></div>
-      <div class="recipe-info"><h3>${esc(r.name)}</h3><small>${this.recipeMeta(r)}</small>${this.nutritionHTML(r)}<div class="actions">${this.data.modules?.nutrition && r.ingredients.length?`<button data-nutrition="${esc(r.id)}">Nährwerte zuordnen</button>`: ''}<button data-favorite="${esc(r.id)}" aria-pressed="${Boolean(r.favorite)}">${r.favorite?'★ Favorit':'☆ Favorit'}</button><button data-edit="${esc(r.id)}">Bearbeiten</button><button class="danger" data-delete="${esc(r.id)}">Löschen</button></div></div></article>`).join('')}</div>
+      <div class="recipe-info"><h3>${esc(r.name)}</h3><small>${this.recipeMeta(r)}</small>${this.nutritionHTML(r)}<div class="actions">${this.data.modules?.nutrition && r.ingredients.length?`<button data-amounts="${esc(r.id)}">Mengen &amp; Nährwerte</button>`: ''}<button data-favorite="${esc(r.id)}" aria-pressed="${Boolean(r.favorite)}">${r.favorite?'★ Favorit':'☆ Favorit'}</button><button data-edit="${esc(r.id)}">Bearbeiten</button><button class="danger" data-delete="${esc(r.id)}">Löschen</button></div></div></article>`).join('')}</div>
       ${Object.keys(this.data.recipes).length?'':'<p>Hier entsteht eure persönliche Rezeptsammlung. Bilder sind optional.</p>'}`;
   }
   openRecipeDialog(id, trigger, schedule = false, editMeal, openLeftover = false) {
@@ -689,13 +1017,15 @@ class EssensplanCard extends HTMLElement {
       `<div class="recipe-media detail-cover">${this.recipeImage(r)}</div><h2 id="recipe-dialog-title">${esc(r.name)}</h2><p class="muted">${this.recipeMeta(r)}</p>${this.nutritionHTML(r,true)}
       <h3>Zutaten</h3><ul>${(r.ingredients.length ? r.ingredients.map(i=>`<li>${i.quantity == null ? esc(i.name) : `${pretty(Number(i.quantity))} ${esc(i.unit)} ${esc(i.name)}`}</li>`).join('') : '<li>Keine Zutaten eingetragen</li>')}</ul>
       <h3>Zubereitung</h3>${r.steps.length ? '' : '<p>Keine Zubereitung eingetragen.</p>'}<ol>${r.steps.map(step=>`<li>${esc(step).replace(/\n/g,'<br>')}</li>`).join('')}</ol>
-      <div class="actions"><button class="primary" data-plan>Einplanen</button><button data-close>Schließen</button></div>`;
+      <div class="actions"><button class="primary" data-plan>Einplanen</button>${this.data.modules?.nutrition && r.ingredients.length?'<button data-amounts-detail>Mengen &amp; Nährwerte</button>':''}<button data-close>Schließen</button></div>`;
     root.append(dialog);
     dialog.addEventListener('close',()=>{dialog.remove();if(trigger?.isConnected) trigger.focus();});
     dialog.querySelector('[data-close]').onclick=()=>dialog.close();
     this.bindRecipeImages(dialog);
     if (!schedule) {
       dialog.querySelector('[data-plan]').onclick=()=>this.openRecipeDialog(id,trigger,true);
+      const amounts=dialog.querySelector('[data-amounts-detail]');
+      if (amounts) amounts.onclick=()=>this.openAmounts(id,trigger);
     } else {
       const form=dialog.querySelector('form'), date=dialog.querySelector('#plan-date'), slot=dialog.querySelector('#plan-slot');
       const source=dialog.querySelector('#plan-source'), cook=dialog.querySelector('#plan-cook');
@@ -1001,7 +1331,7 @@ class EssensplanCard extends HTMLElement {
         choose.disabled=true;
         status.textContent='Screenshots werden lokal gelesen …';
         try {
-          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.13.0');
+          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.14.0');
           const result=await ocr.recognizeRecipe(selected,(page,progress)=>{
             if (active()) status.textContent=`Bild ${page} von ${selected.length} wird lokal gelesen … ${progress} %`;
           },controller.signal);
@@ -1195,7 +1525,8 @@ class EssensplanCard extends HTMLElement {
     root.querySelectorAll('[data-detail]').forEach(el=>el.onclick=()=>{this._recipeId=null;this.navigate('detail',el.dataset.detail,Number(el.dataset.slot || 0));});
     this.bindRecipeImages(root);
     root.querySelectorAll('[data-recipe]').forEach(el=>el.onclick=()=>this.openRecipeDialog(el.dataset.recipe,el));
-    root.querySelectorAll('[data-nutrition]').forEach(el=>el.onclick=()=>this.openNutrition(el.dataset.nutrition,el));
+    root.querySelectorAll('[data-amounts]').forEach(el=>el.onclick=()=>this.openAmounts(el.dataset.amounts,el));
+    root.querySelectorAll('[data-ingredients]').forEach(el=>el.onclick=()=>this.openIngredients(el));
     root.querySelectorAll('[data-schedule]').forEach(el=>el.onclick=()=>this.openRecipeDialog(el.dataset.schedule,el,true));
     root.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>this.editor(el.dataset.edit));
     root.querySelectorAll('[data-delete]').forEach(el=>el.onclick=()=>{if(window.confirm('Dieses Rezept löschen?'))this.change('delete_recipe',{id:el.dataset.delete});});
