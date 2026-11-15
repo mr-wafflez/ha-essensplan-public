@@ -7,6 +7,8 @@ import re
 import unicodedata
 from uuid import uuid4
 
+from .nutrition import validate_assignment
+
 UNITS = {'g': ('g', 1), 'kg': ('g', 1000), 'ml': ('ml', 1), 'l': ('ml', 1000),
          'stück': ('Stück', 1), 'stk': ('Stück', 1), 'el': ('EL', 1), 'tl': ('TL', 1),
          'prise': ('Prise', 1), 'bund': ('Bund', 1), 'dose': ('Dose', 1), '': ('', 1)}
@@ -168,6 +170,21 @@ def mutate(state, operation, payload, today, meals_per_day=1):
         if rid is not None and rid not in result['recipes']:
             raise ValueError('Rezept existiert nicht mehr')
         recipe = validate_recipe(payload, rid)
+        previous = list(result['recipes'].get(rid, {}).get('ingredients', []))
+        for item in recipe['ingredients']:
+            matched = next((old for old in previous if all(
+                old[k] == item[k] for k in ('name', 'quantity', 'unit'))), None)
+            if matched is None:
+                same_name = [old for old in previous if old['name'] == item['name']]
+                matched = same_name[0] if len(same_name) == 1 else None
+            if matched is None:
+                continue
+            previous.remove(matched)
+            if assignment := matched.get('nutrition'):
+                assignment = dict(assignment)
+                if any(matched[k] != item[k] for k in ('quantity', 'unit')):
+                    assignment.pop('grams', None)
+                item['nutrition'] = assignment
         minutes = payload.get('minutes', result['recipes'].get(rid, {}).get('minutes'))
         if minutes is not None:
             if type(minutes) is not int or not 1 <= minutes <= 1440:
@@ -176,6 +193,17 @@ def mutate(state, operation, payload, today, meals_per_day=1):
         if result['recipes'].get(rid, {}).get('favorite'):
             recipe['favorite'] = True
         result['recipes'][recipe['id']] = recipe
+    elif operation == 'set_nutrition':
+        recipe = result['recipes'].get(payload['id'])
+        assignments = payload['assignments']
+        if not recipe or not isinstance(assignments, list) or len(assignments) != len(recipe['ingredients']):
+            raise ValueError('Die Zutatenliste hat sich geändert. Bitte neu laden.')
+        for item, raw in zip(recipe['ingredients'], assignments):
+            assignment = validate_assignment(raw)
+            if assignment:
+                item['nutrition'] = assignment
+            else:
+                item.pop('nutrition', None)
     elif operation == 'favorite':
         recipe = result['recipes'].get(payload['id'])
         if not recipe or type(payload.get('favorite')) is not bool:

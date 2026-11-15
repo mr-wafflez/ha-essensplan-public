@@ -2,10 +2,18 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import sys
+from types import ModuleType
 
-spec = importlib.util.spec_from_file_location('model', Path(__file__).parents[1]/'custom_components/essensplan/model.py')
+component = Path(__file__).parents[1] / 'custom_components/essensplan'
+package = ModuleType('essensplan_model_test')
+package.__path__ = [str(component)]
+sys.modules[package.__name__] = package
+spec = importlib.util.spec_from_file_location(f'{package.__name__}.model', component / 'model.py')
 model = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(model)
+from essensplan_model_test import nutrition
+
 TODAY = '2026-10-15'
 
 
@@ -28,6 +36,53 @@ class ModelTests(unittest.TestCase):
 
     def plan(self, rid, date=TODAY, servings=4):
         self.change('set_meal', {'date':date,'recipe_id':rid,'servings':servings})
+
+    def test_barcode_volume_based_nutrition(self):
+        self.assertEqual(nutrition.barcode(' 3017620422003 '), '3017620422003')
+        with self.assertRaises(ValueError):
+            nutrition.barcode('3017620422004')
+        rid = self.add(ingredient='Milch', quantity='0,5', unit='l')
+        product = {'barcode': '3017620422003', 'name': 'Testprodukt', 'basis': '100ml'}
+        values = {'kcal': 60, 'protein': 3, 'carbs': 5, 'fat': 2}
+        self.change('set_nutrition', {'id': rid, 'assignments': [{'product': product, 'values': values}]})
+        current = self.state['recipes'][rid]
+        self.assertEqual(current['ingredients'][0]['nutrition']['product'], product)
+        self.assertEqual(nutrition.totals(current)['total']['kcal'], 300)
+        self.change('save_recipe', {**current, 'ingredients': [{'name': 'Milch', 'quantity': 500, 'unit': 'g'}]})
+        self.assertEqual(nutrition.totals(self.state['recipes'][rid])['missing'], ['Milch'])
+
+    def test_nutrition_suggestions_and_reuse(self):
+        raw, cooked, *_ = nutrition.candidates('Reis', {})
+        self.assertIn('roh', raw['name'])
+        self.assertIn('gekocht', cooked['name'])
+        self.assertIn('Kartoffel', nutrition.candidates('Kartoffeln roh', {})[0]['name'])
+        rid = self.add(ingredient='Reis')
+        self.change('set_nutrition', {'id': rid, 'assignments': [{'code': cooked['code']}]})
+        self.assertEqual(nutrition.candidates('Reis', self.state['recipes'])[0], cooked)
+
+    def test_nutrition_totals_are_partial_and_do_not_change_shopping(self):
+        values = {'kcal': 120, 'protein': 10, 'carbs': 15, 'fat': 3}
+        raw = recipe(quantity='0,5', unit='kg')
+        raw['ingredients'].append({'name': 'Zwiebel', 'quantity': 1, 'unit': 'stück'})
+        self.change('save_recipe', raw)
+        rid = next(iter(self.state['recipes']))
+        self.plan(rid)
+        before = model.shopping(self.state, TODAY)
+        self.change('set_nutrition', {'id': rid, 'assignments': [{'values': values}, {'values': values}]})
+        result = nutrition.totals(self.state['recipes'][rid])
+        self.assertEqual(result['total'], {'kcal': 600, 'protein': 50, 'carbs': 75, 'fat': 15})
+        self.assertEqual(result['portion']['kcal'], 150)
+        self.assertEqual(result['missing'], ['Zwiebel'])
+        self.change('set_nutrition', {'id': rid, 'assignments': [{'values': values}, {'values': values, 'grams': '80'}]})
+        self.assertEqual(nutrition.totals(self.state['recipes'][rid])['total']['kcal'], 696)
+        self.assertEqual(model.shopping(self.state, TODAY), before)
+        self.change('save_recipe', {**raw, 'id': rid})
+        self.assertEqual(self.state['recipes'][rid]['ingredients'][1]['nutrition']['grams'], '80')
+        raw['ingredients'][1]['quantity'] = 2
+        self.change('save_recipe', {**raw, 'id': rid})
+        self.assertNotIn('grams', self.state['recipes'][rid]['ingredients'][1]['nutrition'])
+        with self.assertRaises(ValueError):
+            self.change('set_nutrition', {'id': rid, 'assignments': [{'code': 'invalid'}, None]})
 
     def test_cooked_status_persists_without_changing_shopping(self):
         rid = self.add()

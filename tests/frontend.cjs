@@ -16,7 +16,7 @@ const assert = require('node:assert/strict');
  await page.route('http://essensplan.test/essensplan_static/**',route=>{
   const name=new URL(route.request().url()).pathname.slice('/essensplan_static/'.length);
   if (name==='recipe-placeholder.svg') return route.fallback();
-  if (!/^(recipe-ocr\.mjs|ocr\/[a-z0-9.-]+)$/.test(name)) return route.fulfill({status:404,body:''});
+  if (!/^(recipe-ocr\.mjs|barcode\/(?:scanner\.mjs|zxing-browser\.min\.js)|ocr\/[a-z0-9.-]+)$/.test(name)) return route.fulfill({status:404,body:''});
   return route.fulfill({path:path.join(__dirname,'../custom_components/essensplan/frontend',name),
    contentType:/\.m?js$/.test(name)?'text/javascript':'application/octet-stream'});
  });
@@ -26,9 +26,18 @@ const assert = require('node:assert/strict');
   window.state={today:'2026-10-15',revision:0,completed:[],shopping_week:'2026-10-12',shopping:[{uid:'s1',summary:'500 g Hähnchen',completed:false}],
    recipes:{r1:{id:'r1',name:'Hähnchen-Curry <sicher>',servings:'4',image:'',ingredients:[{quantity:'500',unit:'g',name:'Hähnchen'}],steps:['Hähnchen würfeln.','Mit Kokosmilch garen.']}},plan:{'2026-10-15':{recipe_id:'r1',servings:'2'}}};
   window.calls=[];
-  window.hass={states:{},callWS:async cmd=>{calls.push(cmd);if(cmd.type==='essensplan/change'){
+  window.hass={states:{},callWS:async cmd=>{calls.push(cmd);
+  if(cmd.type==='essensplan/barcode_lookup') return {product:{barcode:cmd.barcode,name:'Testprodukt',basis:'100g'},
+   values:{kcal:'539',protein:'6.3',carbs:'57.5',fat:'30.9'}};
+  if(cmd.type==='essensplan/nutrition_search') return cmd.queries.map(()=>[{code:'A1',name:'Hähnchen Brust, roh'}]);
+  if(cmd.type==='essensplan/change'){
    if(cmd.revision!==state.revision)throw Error('Revisionskonflikt');
    if(cmd.operation==='save_recipe'){const r=cmd.payload;state.recipes[r.id||'new']={...r,id:r.id||'new'};}
+   if(cmd.operation==='set_nutrition'){
+    const r=state.recipes[cmd.payload.id];
+    r.ingredients.forEach((ingredient,i)=>{ingredient.nutrition=cmd.payload.assignments[i];});
+    state.nutrition={r1:{used:1,missing:['Salz'],portion:{kcal:125,protein:20,carbs:1,fat:3},total:{kcal:500,protein:80,carbs:4,fat:12}}};
+   }
    if(cmd.operation==='favorite'){state.recipes[cmd.payload.id].favorite=cmd.payload.favorite;}
    if(cmd.operation==='shopping_amount'){
     const p=cmd.payload,item=state.shopping.find(i=>i.amount_key===p.key);
@@ -62,13 +71,21 @@ const assert = require('node:assert/strict');
  };
  await card.locator('#today').waitFor();
  assert.match(await card.locator('#today').innerText(),/Hähnchen-Curry <sicher>/);
+ assert.equal(await card.locator('nav [data-mode]').count(),4);
+ assert.equal(await card.locator('nav [data-mode="today"]').getAttribute('aria-current'),'page');
+ assert.equal(await card.locator('[data-act="week"]').count(),0);
  await card.locator('#today').click();
  assert.equal(await card.locator('h2').innerText(),'Hähnchen-Curry <sicher>');
  assert.match(await card.locator('ul').innerText(),/250 g Hähnchen/);
+ assert.equal(await card.locator('nav [data-mode="today"]').getAttribute('aria-current'),'page');
+ await card.locator('[data-back]').click();
+ await card.locator('#today').waitFor();
+ await card.locator('#today').click();
  await card.locator('[data-mode="today"]').click();
  const box=await card.locator('#today').boundingBox();
  await page.mouse.move(box.x+20,box.y+20);await page.mouse.down();await page.waitForTimeout(700);await page.mouse.up();
- assert.equal(await card.locator('h2').innerText(),'Unser Wochenplan');
+ assert.equal(await card.locator('h2').innerText(),'Wochenplan');
+ assert.equal(await card.locator('nav [data-mode="week"]').getAttribute('aria-current'),'page');
  assert.equal(await card.locator('.day').count(),7);
  await card.locator('[data-mode="recipes"]').click();await card.locator('[data-act="new"]').click();
  const screenshot=await page.evaluate(()=>{
@@ -103,6 +120,93 @@ const assert = require('node:assert/strict');
  assert.equal(await card.locator('.ingredient-row').first().locator('[data-quantity]').inputValue(),'500');
  assert.deepEqual(external,[]);
  assert(await page.evaluate(()=>!calls.some(c=>c.operation==='save_recipe')));
+ await card.locator('#cancel').click();
+ // Three local pages can be reordered, overlap only once, and add only the preparation.
+ const pagePng=async (name, lines)=>({
+  name,mimeType:'image/png',buffer:Buffer.from(await page.evaluate(lines=>{
+   const c=document.createElement('canvas');c.width=940;c.height=440;const ctx=c.getContext('2d');
+   ctx.fillStyle='white';ctx.fillRect(0,0,c.width,c.height);ctx.fillStyle='black';ctx.font='32px Arial';
+   lines.forEach((line,i)=>ctx.fillText(line,46,65+i*55));
+   return c.toDataURL('image/png').split(',')[1];
+  },lines),'base64')
+ });
+ const pages=await Promise.all([
+  pagePng('1.png',['Zutaten:','500 g Kartoffeln','100 g Butter']),
+  pagePng('2.png',['100 g Butter','200 g Mehl','Zubereitung:','1. Kartoffeln kochen.','2. Milch erhitzen.']),
+  pagePng('3.png',['2. Milch erhitzen.','3. Alles gut mischen.','Speichern und teilen','Nicht Teil des Rezepts.']),
+ ]);
+
+ await page.evaluate(()=>{state.modules={nutrition:true};return card.load();});
+ await card.locator('[data-nutrition="r1"]').click();
+ const nutritionDialog=card.locator('dialog');
+ await nutritionDialog.locator('select option[value="A1"]').waitFor({state:'attached'});
+ assert.equal(await nutritionDialog.locator('select').inputValue(),'');
+ // A genuine EAN-13 image goes through the bundled decoder, then requires an explicit lookup.
+ const barcodeImage=await page.evaluate(()=>{
+  const code='3017620422003', left=['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+  const parity='LLGGGL';
+  const invert=bits=>bits.replace(/./g,bit=>bit==='1'?'0':'1');
+  const bits='101'+[...code.slice(1,7)].map((digit,i)=>parity[i]==='L'?left[digit]:[...invert(left[digit])].reverse().join('')).join('')
+    +'01010'+[...code.slice(7)].map(digit=>invert(left[digit])).join('')+'101';
+  const canvas=document.createElement('canvas');canvas.width=460;canvas.height=180;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,460,180);
+  ctx.fillStyle='black';[...bits].forEach((bit,i)=>{if(bit==='1')ctx.fillRect(40+i*4,16,4,140);});
+  return canvas.toDataURL('image/png').split(',')[1];
+ });
+ const photoButton=nutritionDialog.getByRole('button',{name:'Barcode fotografieren'});
+ const chooserEvent=page.waitForEvent('filechooser');
+ await photoButton.click();
+ const chooser=await chooserEvent;
+ assert.equal(await chooser.element().getAttribute('capture'),'environment');
+ await chooser.setFiles({name:'barcode.png',mimeType:'image/png',buffer:Buffer.from(barcodeImage,'base64')});
+ await nutritionDialog.getByText('Barcode erkannt.',{exact:false}).waitFor();
+ assert.equal(await nutritionDialog.locator('[data-barcode]').inputValue(),'3017620422003');
+ assert(await page.evaluate(()=>!calls.some(cmd=>cmd.type==='essensplan/barcode_lookup')));
+ await nutritionDialog.locator('[data-lookup]').click();
+ await nutritionDialog.getByText('Testprodukt gefunden.',{exact:false}).waitFor();
+ assert.equal(await nutritionDialog.locator('[name=kcal]').inputValue(),'539');
+ await nutritionDialog.locator('[type=submit]').click();
+ assert(await page.evaluate(()=>calls.some(cmd=>cmd.operation==='set_nutrition' &&
+  cmd.payload.assignments[0].product.barcode==='3017620422003')));
+ await nutritionDialog.waitFor({state:'hidden'});
+ assert.match(await card.locator('[data-recipe-card="r1"]').innerText(),/unvollständig.*125 kcal/s);
+ await card.locator('[data-recipe="r1"]').click();
+ assert.match(await nutritionDialog.innerText(),/Gesamtgericht.*500 kcal.*Salz/s);
+ await nutritionDialog.locator('[data-close]').click();
+ await nutritionDialog.waitFor({state:'detached'});
+ // The secure-context permission failure path switches to a new, user-activated photo action.
+ await page.evaluate(()=>Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{
+  getUserMedia:()=>Promise.reject(new DOMException('Test permission denied','NotAllowedError'))
+ }}));
+ await card.locator('[data-nutrition="r1"]').click();
+ await nutritionDialog.getByRole('button',{name:'Barcode scannen'}).click();
+ await nutritionDialog.getByText('Kamerazugriff verweigert.',{exact:false}).waitFor();
+ const fallbackEvent=page.waitForEvent('filechooser');
+ await nutritionDialog.getByRole('button',{name:'Barcode fotografieren'}).click();
+ await (await fallbackEvent).setFiles([]);
+ await nutritionDialog.locator('[data-close]').click();
+ await nutritionDialog.waitFor({state:'detached'});
+ await page.evaluate(()=>delete navigator.mediaDevices);
+ await page.evaluate(()=>{state.modules.nutrition=false;return card.load();});
+ assert.equal(await card.locator('[data-nutrition]').count(),0);
+ await card.locator('[data-act="new"]').click();
+ await card.locator('#recipe-screenshot').setInputFiles([...pages,pages[0]]);
+ assert.match(await card.locator('#ocr-status').innerText(),/höchstens drei/);
+ await card.locator('#recipe-screenshot').setInputFiles([pages[1],pages[0],pages[2]]);
+ await card.getByRole('button',{name:'Bild 2 nach oben'}).click();
+ assert.match(await card.locator('#ocr-files li').first().innerText(),/^1.png/);
+ await card.locator('#ocr-read').click();
+ await card.locator('#ocr-review').waitFor({timeout:30000});
+ assert.deepEqual((await card.locator('#ocr-text').inputValue()).split('\n'),['500 g Kartoffeln','100 g Butter','200 g Mehl']);
+ assert.deepEqual((await card.locator('#ocr-steps').inputValue()).split('\n'),['Kartoffeln kochen.','Milch erhitzen.','Alles gut mischen.']);
+ assert.equal(await card.locator('#ocr-step-images img').count(),2);
+ assert.match(await card.locator('#ocr-step-hint').innerText(),/Fortsetzungen/);
+ await card.locator('#steps').fill('Vorhandener Schritt.');
+ const stepUrl=await card.locator('#ocr-step-images img').first().getAttribute('src');
+ await card.locator('#apply-ocr-steps').click();
+ assert.equal(await card.locator('#steps').inputValue(),'Vorhandener Schritt.\nKartoffeln kochen.\nMilch erhitzen.\nAlles gut mischen.');
+ assert.equal(await card.locator('.ingredient-row [data-name]').first().inputValue(),'');
+ assert(await page.evaluate(url=>fetch(url).then(()=>false,()=>true),stepUrl));
  await card.locator('#cancel').click();
  if(process.env.ESSENSPLAN_OCR_FIXTURE) {
   await card.locator('[data-act="new"]').click();
@@ -243,7 +347,7 @@ const assert = require('node:assert/strict');
  assert.match(await card.locator('[data-check="s2"]').locator('..').innerText(),/2 stück Paprika/);
  // Route navigation retains the chosen date and uses real HA location changes.
  await page.evaluate(()=>{card.setConfig({mode:'today',detail_path:'/lovelace/rezept',week_path:'/lovelace/essen'});card._mode=null;card.render();});
- await card.locator('#today').click();assert.match(page.url(),/\/lovelace\/rezept\?meal_date=2026-10-15$/);
+ await card.locator('#today').click();assert.match(page.url(),/\/lovelace\/rezept\?meal_date=2026-10-15&from=today$/);
  // Two independently planned meals, per-slot navigation and scaled portions.
  await page.evaluate(()=>{
   state.meals_per_day=2;
@@ -256,8 +360,11 @@ const assert = require('node:assert/strict');
  assert.equal(await card.locator('h2').innerText(),'Salat');
  assert.match(await card.locator('ul').innerText(),/300 g Tomaten/);
  await card.locator('[data-mode="week"]').click();
- assert.equal(await card.locator('form[data-meal-slot]').count(),14);
- const pick=card.locator('[data-pick-slot="2026-10-16"][data-slot="1"]');
+ assert.equal(await card.locator('.slot').count(),14);
+ assert.equal(await card.locator('form, select, input[type=number]').count(),0);
+ const pick=card.locator('[data-slot-open="2026-10-16"][data-slot="1"]');
+ const slotSheet=(date,slot)=>card.locator(`[data-slot-open="${date}"][data-slot="${slot}"]`);
+ const sheet=card.locator('dialog');
  await pick.click();
  await dialog.locator('select').selectOption('recent');
  assert.match(await dialog.innerText(),/Keine passenden Rezepte/);
@@ -268,13 +375,18 @@ const assert = require('node:assert/strict');
  assert.equal(await dialog.locator('#plan-date').inputValue(),'2026-10-16');
  assert.equal(await dialog.locator('#plan-slot').inputValue(),'1');
  await dialog.locator('[data-close]').click();
- await card.locator('[data-meal-prep="2026-10-15"][data-slot="0"]').click();
+ await slotSheet('2026-10-15',0).click();
+ assert.match(await sheet.innerText(),/Hähnchen-Curry <sicher>/);
+ await sheet.locator('[data-slot-action="edit"]').click();
+ assert.equal(await card.locator('dialog').count(),1);
+ assert.match(await card.locator('dialog h2').innerText(),/ändern/);
  await card.locator('#plan-cook').fill('6');
  await card.locator('dialog [type=submit]').click();
  await card.locator('dialog').waitFor({state:'hidden'});
  assert.match(await card.locator('[data-date="2026-10-15"]').innerText(),/4 Portionen noch nicht verplant/);
  await capture('mealprep',card.locator('[data-date="2026-10-15"]'));
- await card.locator('[data-leftover][data-meal-prep="2026-10-15"]').click();
+ await slotSheet('2026-10-15',0).click();
+ await sheet.locator('[data-slot-action="leftover"]').click();
  assert.equal(await dialog.locator('#leftover-date').inputValue(),'2026-10-16');
  await dialog.locator('[data-close]').click();
  await card.locator('[data-mode="recipes"]').click();
@@ -294,42 +406,89 @@ const assert = require('node:assert/strict');
  await dialog.locator('select').selectOption('recent');
  assert.equal(await dialog.locator('[data-pick="r1"]').count(),1);
  await dialog.locator('[data-close]').click();
- const lunch=card.locator('[data-date="2026-10-15"] [data-meal-slot="0"]');
- const dinner=card.locator('[data-date="2026-10-15"] [data-meal-slot="1"]');
- await lunch.locator('input').fill('3');
- await dinner.locator('input').fill('5');
+ // Portions change in the schedule dialog; the cook portions and the cooked flag are kept.
+ await slotSheet('2026-10-15',0).click();
+ await sheet.locator('[data-slot-action="edit"]').click();
+ await card.locator('#plan-servings').fill('3');
+ // A background change invalidates the open dialog instead of silently overwriting it.
  await page.evaluate(()=>{state.revision++;return card.load();});
- await lunch.locator('[type="submit"]').click();
- assert.match(await card.locator('#error').innerText(),/Revisionskonflikt/);
- assert.equal(await lunch.locator('input').inputValue(),'3');
- await card.locator('[data-act="reload-plan"]').click();
- assert.equal(await lunch.locator('input').inputValue(),'2');
- await lunch.locator('input').fill('3');await dinner.locator('input').fill('5');
- await lunch.locator('[type="submit"]').click();
- assert.equal(await dinner.locator('input').inputValue(),'5');
- await dinner.locator('[type="submit"]').click();
+ await card.locator('dialog [type=submit]').click();
+ assert.match(await card.locator('#dialog-error').innerText(),/Der Plan wurde geändert/);
+ assert(await page.evaluate(()=>state.plan['2026-10-15'][0].servings==='2'));
+ await card.locator('dialog [data-close]').click();
+ await card.locator('dialog').waitFor({state:'detached'});
+ await slotSheet('2026-10-15',0).click();
+ await sheet.locator('[data-slot-action="edit"]').click();
+ await card.locator('#plan-servings').fill('3');
+ await card.locator('dialog [type=submit]').click();
+ await card.locator('dialog').waitFor({state:'detached'});
  assert.equal(await card.locator('#error').innerText(),'');
- assert(await page.evaluate(()=>state.plan['2026-10-15'][0].servings==='3'&&state.plan['2026-10-15'][1].servings==='5'));
- await lunch.locator('select').selectOption('');await lunch.locator('[type="submit"]').click();
+ assert(await page.evaluate(()=>state.plan['2026-10-15'][0].servings==='3' &&
+  state.plan['2026-10-15'][0].cook_servings==='6' && state.plan['2026-10-15'][1].servings==='6'));
+ // Quick check button and the sheet share the same cooked toggle.
+ await slotSheet('2026-10-15',1).click();
+ await sheet.locator('[data-slot-action="cooked"]').click();
+ assert(await page.evaluate(()=>state.plan['2026-10-15'][1].cooked===true));
+ await card.locator('[data-cooked="2026-10-15"][data-slot="1"][aria-pressed=true]').click();
+ assert(await page.evaluate(()=>!state.plan['2026-10-15'][1].cooked));
+ // Replacing a recipe keeps the date and slot but starts from the new recipe's own defaults.
+ await slotSheet('2026-10-15',1).click();
+ await sheet.locator('[data-slot-action="replace"]').click();
+ await sheet.locator('[data-pick="r1"]').click();
+ assert.equal(await card.locator('#plan-date').inputValue(),'2026-10-15');
+ assert.equal(await card.locator('#plan-servings').inputValue(),'4');
+ assert.equal(await card.locator('#plan-cook').inputValue(),'');
+ await card.locator('dialog [type=submit]').click();
+ await card.locator('dialog').waitFor({state:'detached'});
+ assert(await page.evaluate(()=>state.plan['2026-10-15'][1].recipe_id==='r1' && state.plan['2026-10-15'][1].servings==='4'));
+ await slotSheet('2026-10-15',1).click();
+ await sheet.locator('[data-slot-action="replace"]').click();
+ await sheet.locator('[data-pick="salad"]').click();
+ await card.locator('#plan-servings').fill('6');
+ await card.locator('dialog [type=submit]').click();
+ await card.locator('dialog').waitFor({state:'detached'});
+ // Removing needs a second tap; a freed lunch never moves dinner.
+ await slotSheet('2026-10-15',0).click();
+ await sheet.locator('[data-slot-action="remove"]').click();
+ assert.equal(await sheet.locator('[data-slot-action="remove"]').innerText(),'Wirklich entfernen?');
+ assert(await page.evaluate(()=>state.plan['2026-10-15'][0]!==null));
+ await sheet.locator('[data-slot-action="remove"]').click();
+ await card.locator('dialog').waitFor({state:'detached'});
  assert(await page.evaluate(()=>state.plan['2026-10-15'][0]===null&&state.plan['2026-10-15'][1].recipe_id==='salad'));
- await dinner.locator('[data-detail]').click();assert.equal(await card.locator('h2').innerText(),'Salat');
+ await slotSheet('2026-10-15',1).click();
+ await sheet.locator('[data-slot-action="view"]').click();
+ assert.equal(await card.locator('h2').innerText(),'Salat');
+ await card.locator('[data-back]').click();
+ assert.equal(await card.locator('h2').innerText(),'Wochenplan');
  // Slot identity survives a separate dashboard route and a newly created card.
  await page.evaluate(()=>{card.setConfig({mode:'today',detail_path:'/lovelace/rezept'});card._mode='today';card.render();});
- await card.locator('#today-1').click();assert.match(page.url(),/meal_date=2026-10-15&meal_slot=1$/);
+ await card.locator('#today-1').click();assert.match(page.url(),/meal_date=2026-10-15&meal_slot=1&from=today$/);
  await page.evaluate(()=>{card.remove();const next=document.createElement('essensplan-card');next.setConfig({mode:'detail'});document.querySelector('main').append(next);next.hass=hass;window.card=next;});
  await card.locator('h2').waitFor();assert.equal(await card.locator('h2').innerText(),'Salat');
  // Reducing the count keeps an occupied additional slot visible; saving errors retain drafts.
  await page.evaluate(()=>{state.meals_per_day=1;card.data=structuredClone(state);card._mode='week';card.render();});
- assert.equal(await card.locator('[data-date="2026-10-15"] form').count(),2);
- await dinner.locator('input').fill('7');await page.evaluate(()=>window.rejectMeal=true);
- await dinner.locator('[type="submit"]').click();
- assert.match(await card.locator('#error').innerText(),/Speichern fehlgeschlagen/);
- assert.equal(await dinner.locator('input').inputValue(),'7');
- await page.evaluate(()=>window.rejectMeal=false);await dinner.locator('[type="submit"]').click();
+ assert.equal(await card.locator('[data-date="2026-10-15"] .slot').count(),2);
+ await slotSheet('2026-10-15',1).click();
+ await sheet.locator('[data-slot-action="edit"]').click();
+ await card.locator('#plan-servings').fill('7');
+ await page.evaluate(()=>window.rejectMeal=true);
+ await card.locator('dialog [type=submit]').click();
+ assert.match(await card.locator('#dialog-error').innerText(),/Speichern fehlgeschlagen/);
+ assert.equal(await card.locator('#plan-servings').inputValue(),'7');
+ await page.evaluate(()=>window.rejectMeal=false);
+ await card.locator('dialog [type=submit]').click();
+ await card.locator('dialog').waitFor({state:'detached'});
  assert.equal(await card.locator('#error').innerText(),'');
- // Background updates refresh clean weekly rows while keeping unsaved drafts.
+ assert(await page.evaluate(()=>state.plan['2026-10-15'][1].servings==='7'));
+ // Background updates refresh the week tiles.
  await page.evaluate(()=>{state.plan['2026-10-16']=[{recipe_id:'salad',servings:'9'}];state.revision++;card._isInteracting=false;return card.load();});
- assert.equal(await card.locator('[data-date="2026-10-16"] [data-meal-slot="0"] input').inputValue(),'9');
+ assert.match(await card.locator('[data-date="2026-10-16"]').innerText(),/Salat[\s\S]*9 Portionen/);
+ // An empty slot on today's tile opens the recipe picker without a detour through the week.
+ await page.evaluate(()=>{delete state.plan['2026-10-15'];state.revision++;card.setConfig({mode:'today'});return card.load();});
+ await card.locator('#today').click();
+ assert.match(await card.locator('dialog').innerText(),/Rezept auswählen/);
+ await card.locator('dialog [data-close]').click();
+ await card.locator('dialog').waitFor({state:'detached'});
  // Mobile widths must not overflow horizontally.
  await page.setViewportSize({width:375,height:812});
  await page.evaluate(()=>{card._mode='week';card.render();});
@@ -362,6 +521,6 @@ const assert = require('node:assert/strict');
  await page.goBack();
  await card.locator('[data-mode="week"][aria-current=page]').waitFor();
  assert.deepEqual(errors,[]);
- console.log('PASS: tap, long press, week, scaled ingredients, recipe creation, checklist, escaping; two meals, independent saves, draft and conflict protection, remove one slot, slot-specific detail URLs, retained meals after reducing count, failed save/retry, mobile width.');
+ console.log('PASS: one navigation, back button, tap, long press, week tiles and action sheet, scaled ingredients, recipe creation, checklist, escaping; two meals, conflict protection, replace and remove one slot, slot-specific detail URLs with origin tab, retained meals after reducing count, failed save/retry, mobile width.');
  } finally { await browser.close(); }
 })().catch(err=>{console.error(err);process.exitCode=1;});

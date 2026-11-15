@@ -1,4 +1,4 @@
-/* Essensplan 0.8.0 – bundled with the integration; no CDN or build step. */
+/* Essensplan 0.13.0 – bundled with the integration; no CDN or build step. */
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const localDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 function offsetDay(stamp, n) { const d = new Date(`${stamp}T12:00:00`); d.setDate(d.getDate()+n); return localDate(d); }
@@ -66,7 +66,7 @@ class EssensplanCard extends HTMLElement {
     }
     if (config.image_max_mb !== undefined && (!Number.isInteger(config.image_max_mb) || config.image_max_mb < 1 || config.image_max_mb > 20)) throw new Error('image_max_mb: 1–20');
     this.config = {mode:'today', ...config};
-    this._mode = this._selectedDate = this._selectedSlot = undefined;
+    this._mode = this._selectedDate = this._selectedSlot = this._backMode = undefined;
     if (this._hass) this.load();
   }
   set hass(hass) {
@@ -85,6 +85,7 @@ class EssensplanCard extends HTMLElement {
     clearInterval(this._interval); clearTimeout(this._hold);
     this.clearImagePreview();
     this.clearOcrPreview();
+    this._barcodeStop?.();
     window.removeEventListener('popstate', this._urlChanged);
     window.removeEventListener('location-changed', this._urlChanged);
   }
@@ -98,7 +99,7 @@ class EssensplanCard extends HTMLElement {
       this.data = await this._hass.callWS({type:'essensplan/get'});
       this._loadError = '';
       // Preserve an editor and its unsaved text across background refreshes.
-      if (!this.shadowRoot.querySelector('dialog, form:not([data-meal-slot])') && !this._isInteracting) this.render();
+      if (!this.shadowRoot.querySelector('dialog, form') && !this._isInteracting) this.render();
     } catch (err) {
       this._loadError = err.message || String(err);
       if (!this.data) this.render();
@@ -109,24 +110,29 @@ class EssensplanCard extends HTMLElement {
     this._saving = true;
     try {
       this.data = await this._hass.callWS({type:'essensplan/change', operation, payload, revision});
-      if (operation === 'set_meal') {
-        delete this._mealDrafts?.[`${payload.date}/${payload.slot || 0}`];
-        for (const draft of Object.values(this._mealDrafts || {})) {
-          if (draft.revision === revision) draft.revision = this.data.revision;
-        }
-      }
       this._error = ''; this.render();
       return true;
     } catch (err) {
       this._error = err.message || String(err);
-      // Keep the draft on conflict. Refresh the revision for an intentional retry.
+      // Refresh the revision so an intentional retry in a reopened dialog works.
       await this.load();
       const box = this.shadowRoot.querySelector('#error');
       if (box) box.textContent = this._error;
       return false;
     } finally { this._saving = false; }
   }
+  backMode() {
+    const modes = ['today', 'week', 'recipes', 'shopping'];
+    const params = new URLSearchParams(location.search);
+    // In-card navigation knows its origin; after a route change the URL carries it.
+    if (modes.includes(this._backMode)) return this._backMode;
+    if (modes.includes(params.get('from'))) return params.get('from');
+    const stamp = this._selectedDate || params.get('meal_date') || this.data?.today;
+    return stamp === this.data?.today ? 'today' : 'week';
+  }
   navigate(mode, stamp, slot = 0) {
+    const current = this._mode || this.config.mode;
+    if (mode === 'detail' && current !== 'detail') this._backMode = current;
     if (mode === 'week' && this.data) this.week = monday(stamp || this.data.today);
     const path = this.config.view_paths?.[mode] ||
       (mode === 'detail' ? this.config.detail_path : mode === 'week' ? this.config.week_path : undefined);
@@ -134,6 +140,7 @@ class EssensplanCard extends HTMLElement {
       const url = new URL(path, location.origin);
       if (stamp) url.searchParams.set('meal_date', stamp);
       if (mode === 'detail' && slot) url.searchParams.set('meal_slot', slot);
+      if (mode === 'detail' && ['today', 'week', 'recipes', 'shopping'].includes(current)) url.searchParams.set('from', current);
       if (url.pathname+url.search+url.hash === location.pathname+location.search+location.hash) return;
       history.pushState(null, '', url.pathname+url.search+url.hash);
       window.dispatchEvent(new CustomEvent('location-changed',{detail:{replace:false}}));
@@ -154,6 +161,7 @@ class EssensplanCard extends HTMLElement {
     if (!this.config) return;
     this.clearImagePreview();
     this.clearOcrPreview();
+    this._barcodeStop?.();
     const mode = this._mode || this.config.mode;
     const d = this.data;
     let body = '';
@@ -169,20 +177,30 @@ class EssensplanCard extends HTMLElement {
       if (mode === 'recipes') body = this.recipesHTML();
       if (mode === 'shopping') body = this.shoppingHTML();
     }
-    const nav = d && mode !== 'today' ? `<nav aria-label="Essensplan">${[['today','Heute'],['week','Wochenplan'],['recipes','Rezepte'],['shopping','Einkauf']].map(([key,label])=>
-      `<button data-mode="${key}"${mode===key?' aria-current="page"':''}>${label}</button>`).join('')}</nav>` : '';
+    const active = d && mode === 'detail' ? this.backMode() : mode;
+    const nav = d ? `<nav aria-label="Essensplan">${[['today','🍽️','Heute'],['week','🗓️','Woche'],['recipes','📖','Rezepte'],['shopping','🛒','Einkauf']].map(([key,icon,label])=>
+      `<button type="button" data-mode="${key}"${active===key?' aria-current="page"':''}><span class="ico" aria-hidden="true">${icon}</span><span>${label}</span></button>`).join('')}</nav>` : '';
     this.shadowRoot.innerHTML = `<style>
       :host{display:block;color:var(--primary-text-color);font-family:var(--paper-font-body1_-_font-family, sans-serif)}
       *{box-sizing:border-box}ha-card{padding:18px;overflow:hidden}h2{font-size:22px;margin:4px 0 12px}h3{margin:12px 0 8px;font-size:18px}p{line-height:1.5}small,.muted{color:var(--secondary-text-color)}
       button,select,input,textarea{font:inherit;color:var(--primary-text-color);border:1px solid var(--divider-color,#8885);border-radius:10px;background:var(--card-background-color,#fff);padding:10px;min-height:44px}
       button{cursor:pointer}button:hover{border-color:var(--primary-color)}button:focus-visible,input:focus,textarea:focus,select:focus{outline:2px solid var(--primary-color);outline-offset:2px}
       .primary{background:var(--primary-color);color:var(--text-primary-color,#fff);border-color:transparent}.danger{color:var(--error-color,#c33)}
-      nav,.row,.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}nav{margin-top:20px;padding-top:12px;border-top:1px solid var(--divider-color,#8883)}nav button{flex:1;font-size:13px;padding:8px}
+      .row,.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
       .row{justify-content:space-between}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:12px}
       .recipe{border:1px solid var(--divider-color,#8883);border-radius:16px;padding:12px}.recipe img,.hero{width:100%;height:150px;object-fit:cover;border-radius:12px}.emoji{font-size:38px;line-height:1.4}
       .tile{width:100%;text-align:left;touch-action:pan-y;padding:18px;border-radius:16px;background:var(--secondary-background-color,#8881)}.tile strong{display:block;font-size:24px;margin:8px 0}.tile small{display:block}
-      .meals{display:grid;gap:10px}.day form{margin:10px 0 0;padding:10px;border:1px solid var(--divider-color,#8883);border-radius:12px;min-width:0}.day form .muted{font-size:13px}.day select{max-width:100%}
-      .day{padding:14px 0;border-bottom:1px solid var(--divider-color,#8883)}.day select{flex:1;min-width:130px}.day input[type=number]{width:90px;flex:0 0 90px}.day .row{margin-top:8px}.day.today{border-left:3px solid var(--primary-color);padding-left:10px}
+      .meals{display:grid;gap:10px}.tile .cta{display:block;margin-top:10px;font-weight:650;color:var(--primary-color)}
+      .day{padding:14px 0;border-bottom:1px solid var(--divider-color,#8883)}.day.today{border-left:3px solid var(--primary-color);padding-left:10px}
+      .day-head{display:flex;align-items:center;gap:8px}.badge{font-size:12px;padding:2px 10px;border-radius:999px;background:var(--primary-color);color:var(--text-primary-color,#fff)}
+      .slot{display:flex;align-items:stretch;gap:8px;margin:8px 0 0}
+      .slot button.slot-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:left;min-height:58px;padding:12px 16px;border-radius:18px}
+      .slot-main strong{font-size:17px;overflow-wrap:anywhere}.slot-main small{overflow-wrap:anywhere}
+      .slot.empty button.slot-main{border-style:dashed;color:var(--secondary-text-color)}.slot.empty .slot-main strong{font-weight:500}
+      .slot button.slot-check{flex:0 0 56px;width:56px;padding:0;font-size:24px;border-radius:18px}
+      .slot button.slot-check[aria-pressed=true]{background:var(--success-color,#2e7d32);border-color:transparent;color:#fff}
+      .slot.cooked .slot-main strong{color:var(--secondary-text-color)}
+      .back-row{margin-bottom:12px}
       label{display:block;margin:12px 0 5px}input:not([type=checkbox]),textarea{width:100%}textarea{min-height:115px;resize:vertical}li{margin-bottom:12px;line-height:1.5}#error{color:var(--error-color,#c33);white-space:pre-wrap}#error:empty{display:none}
       .check{display:flex;align-items:center;gap:12px;margin:0;padding:10px 0;border-bottom:1px solid var(--divider-color,#8883)}.check input{width:24px;height:24px}.check.done span{text-decoration:line-through;color:var(--secondary-text-color)}
             .recipe-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));gap:16px;margin-top:14px}
@@ -190,6 +208,8 @@ class EssensplanCard extends HTMLElement {
       .recipe-media{position:relative;aspect-ratio:4/3;background:#e5ab75;overflow:hidden}.recipe-media img{width:100%;height:100%;object-fit:cover;display:block}
       .recipe-info{padding:12px 14px;overflow-wrap:anywhere}.recipe-info h3{margin:0 0 5px}.recipe-info .actions{margin-top:10px}
       .bubbles{position:absolute;right:12px;bottom:12px;display:flex;gap:8px}.bubble{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;padding:0;background:var(--card-background-color,#fff);box-shadow:0 2px 8px #0005}.bubble svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8}
+      .barcode-video{width:100%;max-height:240px;object-fit:contain;background:#111}
+      .nutrition-rows{display:grid;gap:12px}.nutrition-rows fieldset{min-width:0;margin:0}
       .ocr-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;align-items:start}
       .ocr-columns img{display:block;max-width:100%;max-height:380px;object-fit:contain;border-radius:8px}.ocr-columns textarea{min-height:220px}
       .picker-list{display:grid;gap:8px;margin:12px 0}.picker-list button{text-align:left}
@@ -207,7 +227,7 @@ class EssensplanCard extends HTMLElement {
       ha-card{
         color:var(--ep-text);border-radius:26px;border:1px solid var(--ep-edge);
         background:var(--ep-surface);
-        background-image:url("/essensplan_static/kitchen-background.svg?v=0.8.0"),
+        background-image:url("/essensplan_static/kitchen-background.svg?v=0.13.0"),
           radial-gradient(ellipse at top left,#d9a47524,transparent 68%);
         background-size:min(100%,640px) auto,100% 360px;
         background-position:top right,top left;background-repeat:no-repeat;
@@ -227,22 +247,25 @@ class EssensplanCard extends HTMLElement {
       button:not(.primary),select,input,textarea{box-shadow:inset 0 1px 0 var(--ep-glint)}
       .bubble{background:var(--ep-surface);color:var(--ep-text);border:1px solid var(--ep-glint);box-shadow:0 3px 12px #0005,inset 0 1px 0 var(--ep-glint)}
       nav{
-        border:1px solid var(--ep-edge);border-radius:20px;padding:6px;
+        display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0 0 16px;
+        border:1px solid var(--ep-edge);border-radius:22px;padding:5px;
         background:var(--secondary-background-color,var(--ep-surface));
       }
-      nav button{border-color:transparent}
-      nav button[aria-current=page]{border-color:var(--ep-accent);font-weight:650}
+      nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:54px;padding:6px 4px;
+        font-size:13px;border-color:transparent;background:transparent}
+      nav button .ico{font-size:20px;line-height:1.1}
+      nav button[aria-current=page]{background:var(--ep-accent);color:var(--text-primary-color,#fff);font-weight:650}
       dialog{box-shadow:0 16px 54px #0005,inset 0 1px 0 var(--ep-glint)}
       @supports (color:color-mix(in srgb,white,black)){
         ha-card{
-          background-image:url("/essensplan_static/kitchen-background.svg?v=0.8.0"),
+          background-image:url("/essensplan_static/kitchen-background.svg?v=0.13.0"),
             radial-gradient(ellipse at 2% 0%,color-mix(in srgb,#e6ad7d 20%,transparent),transparent 63%),
             radial-gradient(ellipse at 96% 16%,color-mix(in srgb,#9baa7f 18%,transparent),transparent 65%),
             radial-gradient(ellipse at 5% 100%,color-mix(in srgb,var(--ep-accent) 12%,transparent),transparent 66%);
           background-size:min(100%,640px) auto,100% 420px,100% 420px,100% 360px;
           background-position:top right,top left,top right,bottom left;
         }
-        .recipe-card,.tile,.day form{background:color-mix(in srgb,var(--ep-surface) 86%,transparent)}
+        .recipe-card,.tile,.slot-main{background:color-mix(in srgb,var(--ep-surface) 86%,transparent)}
         .bubble{background:color-mix(in srgb,var(--ep-surface) 91%,transparent)}
         dialog{background:color-mix(in srgb,var(--ep-surface) 97%,transparent)}
       }
@@ -268,22 +291,21 @@ class EssensplanCard extends HTMLElement {
         .ingredient-row .ingredient-name{grid-column:1 / -1}
       }
       @media (prefers-reduced-transparency:reduce), (forced-colors:active){
-        ha-card,.recipe-card,.tile,.day form,.bubble,dialog{background:var(--ep-surface);backdrop-filter:none}
+        ha-card,.recipe-card,.tile,.slot-main,.bubble,dialog{background:var(--ep-surface);backdrop-filter:none}
       }
-      .hint{font-size:13px;line-height:1.5}.spacer{margin-top:12px}@media(max-width:450px){ha-card{padding:12px}.day .row{gap:6px}nav{gap:4px}nav button{font-size:12px}}
-    </style><ha-card><div id="error" role="alert">${esc(this._error)}</div>${this._notice?`<p role="status" tabindex="-1">${esc(this._notice)}</p>`:''}${body}${nav}</ha-card>`;
+      .hint{font-size:13px;line-height:1.5}.spacer{margin-top:12px}@media(max-width:450px){ha-card{padding:12px}nav{gap:2px}nav button{font-size:12px}.slot button.slot-main{padding:10px 12px}.slot button.slot-check{flex-basis:50px;width:50px}}
+    </style><ha-card>${nav}<div id="error" role="alert">${esc(this._error)}</div>${this._notice?`<p role="status" tabindex="-1">${esc(this._notice)}</p>`:''}${body}</ha-card>`;
     this.bind();
   }
   todayHTML() {
     const stamp = this.data.today, count = this.slotCount(stamp);
     return `<div class="meals">${Array.from({length:count},(_,slot)=>{
       const {meal, recipe} = this.recipeFor(stamp, slot);
-      return `<button class="tile" id="${slot ? `today-${slot}` : 'today'}" data-today-slot="${slot}" aria-label="Gericht ${slot+1}: ${esc(recipe?.name || 'Heute noch nichts geplant')}. Tippen für Rezept, gedrückt halten für Wochenplan.">
+      return `<button class="tile" id="${slot ? `today-${slot}` : 'today'}" data-today-slot="${slot}" aria-label="Gericht ${slot+1}: ${esc(recipe?.name || 'Heute noch nichts geplant')}. ${recipe ? 'Tippen für Rezept, gedrückt halten für Wochenplan.' : 'Tippen, um ein Gericht auszuwählen.'}">
       ${recipe?.image ? `<img class="hero" alt="" src="${esc(recipe.image)}">` : '<span class="emoji" aria-hidden="true">🍽️</span>'}
       <small>${esc(this.config.title || 'Heute auf dem Tisch')} · ${esc(labelDate(stamp))}${count>1?` · Gericht ${slot+1}`:''}</small>
-      <strong>${esc(recipe?.name || 'Noch nichts geplant')}</strong><small>${meal ? `${esc(meal.servings)} Portionen${meal.prepared_from?' · '+esc(this.prepLabel(meal.prepared_from)):''} · Rezept öffnen` : 'Im Wochenplan ein Gericht auswählen'}</small></button>`;
-    }).join('')}</div>
-      <div class="actions spacer"><button data-act="week">Wochenplan</button><button data-mode="recipes">Rezepte</button><button data-mode="shopping">Einkauf</button></div>`;
+      <strong>${esc(recipe?.name || 'Noch nichts geplant')}</strong>${meal ? `<small>${esc(meal.servings)} Portionen${meal.prepared_from?' · '+esc(this.prepLabel(meal.prepared_from)):''}</small>` : ''}<span class="cta">${meal ? 'Rezept öffnen ›' : 'Gericht auswählen ›'}</span></button>`;
+    }).join('')}</div>`;
   }
 
   prepLabel(source) {
@@ -297,7 +319,7 @@ class EssensplanCard extends HTMLElement {
     }
     return Number(spare.toFixed(3));
   }
-  openRecipePicker(date,slot,trigger) {
+  openRecipePicker(date,slot,trigger,replace=false) {
     const revision=this.data.revision;
     const recent=new Map();
     for (const stamp of Object.keys(this.data.plan).sort()) for (const meal of this.mealsFor(stamp)) {
@@ -325,7 +347,7 @@ class EssensplanCard extends HTMLElement {
     list.onclick=event=>{
       const id=event.target.closest('[data-pick]')?.dataset.pick;
       if (!id) return;
-      if (this.data.revision!==revision || this.mealsFor(date)[slot] || this._mealDrafts?.[`${date}/${slot}`]) {
+      if (this.data.revision!==revision || (!replace && this.mealsFor(date)[slot])) {
         list.textContent='Der Platz wurde geändert. Öffne die Rezeptwahl erneut.';
         return;
       }
@@ -338,32 +360,89 @@ class EssensplanCard extends HTMLElement {
     dialog.showModal();
   }
   weekHTML() {
-    const recipes = Object.values(this.data.recipes).sort((a,b)=>a.name.localeCompare(b.name,'de'));
-    return `<div class="row"><h2>Unser Wochenplan</h2><div class="actions"><button data-shift="-7" aria-label="Vorherige Woche">←</button><button data-act="this-week">Heute</button><button data-shift="7" aria-label="Nächste Woche">→</button></div></div>
+    const hasRecipes = Object.keys(this.data.recipes).length > 0;
+    return `<div class="row"><h2>Wochenplan</h2><div class="actions"><button type="button" data-shift="-7" aria-label="Vorherige Woche">←</button><button type="button" data-act="this-week">Heute</button><button type="button" data-shift="7" aria-label="Nächste Woche">→</button></div></div>
       <p class="muted">${esc(labelDate(this.week))} – ${esc(labelDate(offsetDay(this.week,6)))}</p>
-      ${!recipes.length ? '<p>Lege zuerst unter „Rezepte“ dein erstes Gericht an.</p>' : ''}
-      ${Array.from({length:7},(_,i)=>{const stamp=offsetDay(this.week,i),count=this.slotCount(stamp); return `<section class="day ${stamp===this.data.today?'today':''}" data-date="${stamp}"><strong>${esc(labelDate(stamp))}</strong>
-      ${Array.from({length:count},(_,slot)=>{const {meal,recipe}=this.recipeFor(stamp,slot),draft=this._mealDrafts?.[`${stamp}/${slot}`],value=draft || meal, spare=meal?.cook_servings ? this.sparePortions(stamp,slot,meal) : 0;return `<form data-meal-slot="${slot}" data-revision="${draft?.revision ?? this.data.revision}">
-      ${count>1?`<span class="muted">Gericht ${slot+1}</span>`:''}<div class="row"><select aria-label="Gericht ${slot+1} am ${stamp}"><option value="">Noch offen</option>${recipes.map(r=>`<option value="${r.id}" ${value?.recipe_id===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select>
-      <input type="number" min="0.1" max="100" step="0.1" required value="${esc(value?.servings || 4)}" aria-label="Portionen für Gericht ${slot+1} am ${stamp}"><button type="submit" class="primary">Speichern</button>${recipe?`<button type="button" data-detail="${stamp}" data-slot="${slot}">Rezept</button><button type="button" data-meal-prep="${stamp}" data-slot="${slot}">Mealprep</button>`:''}</div>
-      ${!value && recipes.length?`<button type="button" data-pick-slot="${stamp}" data-slot="${slot}">Rezept auswählen</button>`:''}
-      ${meal && !meal.prepared_from && stamp<=this.data.today?`<button type="button" data-cooked="${stamp}" data-slot="${slot}" aria-pressed="${Boolean(meal.cooked)}">${meal.cooked?'✓ Gekocht · Rückgängig':'Als gekocht markieren'}</button>`:''}
-      ${spare>0?`<small>${pretty(spare)} Portionen noch nicht verplant</small><button type="button" data-meal-prep="${stamp}" data-slot="${slot}" data-leftover>Reste einplanen</button>`:''}
-      ${meal?.prepared_from?`<small>${esc(this.prepLabel(meal.prepared_from))}</small>`:meal?.cook_servings?`<small>${esc(meal.cook_servings)} Portionen ${meal.cooked?'gekocht':'zum Kochen geplant'}</small>`:''}</form>`;}).join('')}</section>`;}).join('')}
-      <p class="hint">Beim Speichern wird die Einkaufsliste automatisch auf diese Woche umgestellt. „Noch offen“ + Speichern entfernt ein Gericht.</p>
-      <p class="hint">Gerichte pro Tag: ${this.data.meals_per_day || 1}. Änderbar unter Einstellungen → Geräte & Dienste → Essensplan → Konfigurieren (1–6). Bereits belegte zusätzliche Plätze bleiben erhalten.</p>
-      <div class="actions"><button data-act="shopping-week">Einkaufsliste für diese Woche anzeigen</button><button data-act="reload-plan">Plan neu laden und ungespeicherte Änderungen verwerfen</button></div>`;
+      ${!hasRecipes ? '<p>Lege zuerst unter „Rezepte“ dein erstes Gericht an.</p>' : ''}
+      ${Array.from({length:7},(_,i)=>{const stamp=offsetDay(this.week,i),count=this.slotCount(stamp);
+        return `<section class="day ${stamp===this.data.today?'today':''}" data-date="${stamp}"><div class="day-head"><strong>${esc(labelDate(stamp))}</strong>${stamp===this.data.today?'<span class="badge">Heute</span>':''}</div>
+        ${Array.from({length:count},(_,slot)=>this.slotHTML(stamp,slot,count)).join('')}</section>`;}).join('')}
+      <p class="hint">Tippe auf ein Gericht, um es zu ändern, oder auf einen freien Platz, um ein Rezept zu wählen. Änderungen gelten sofort und stellen die Einkaufsliste auf diese Woche um.</p>
+      <div class="actions"><button type="button" data-act="shopping-week">Einkaufsliste für diese Woche anzeigen</button></div>
+      <p class="hint">Gerichte pro Tag: ${this.data.meals_per_day || 1}. Änderbar unter Einstellungen → Geräte & Dienste → Essensplan → Konfigurieren (1–6). Bereits belegte zusätzliche Plätze bleiben erhalten.</p>`;
+  }
+  slotHTML(stamp, slot, count) {
+    const {meal, recipe} = this.recipeFor(stamp, slot);
+    const label = `Gericht ${slot+1} am ${labelDate(stamp)}`;
+    const title = count > 1 ? `<small>Gericht ${slot+1}</small>` : '';
+    if (!meal || !recipe) {
+      const can = Object.keys(this.data.recipes).length > 0;
+      return `<div class="slot empty"><button type="button" class="slot-main" data-slot-open="${stamp}" data-slot="${slot}" aria-label="${esc(label)}: noch offen${can?'. Rezept auswählen':''}"${can?'':' disabled'}>${title}<strong>Noch offen</strong><small>${can?'Tippen, um ein Rezept zu wählen':'Noch keine Rezepte vorhanden'}</small></button></div>`;
+    }
+    const spare = meal.cook_servings ? this.sparePortions(stamp, slot, meal) : 0;
+    const notes = [`${pretty(Number(meal.servings))} Portionen`];
+    if (meal.prepared_from) notes.push(this.prepLabel(meal.prepared_from));
+    else if (meal.cook_servings) notes.push(`${pretty(Number(meal.cook_servings))} Portionen ${meal.cooked?'gekocht':'zum Kochen geplant'}`);
+    if (spare > 0) notes.push(`${pretty(spare)} Portionen noch nicht verplant`);
+    const check = meal.cooked ? 'Gekocht · Rückgängig' : 'Als gekocht markieren';
+    return `<div class="slot filled${meal.cooked?' cooked':''}"><button type="button" class="slot-main" data-slot-open="${stamp}" data-slot="${slot}" aria-label="${esc(label)}: ${esc(recipe.name)}. Tippen zum Ändern">${title}<strong>${esc(recipe.name)}</strong><small>${esc(notes.join(' · '))}</small></button>${
+      !meal.prepared_from && stamp <= this.data.today ? `<button type="button" class="slot-check" data-cooked="${stamp}" data-slot="${slot}" aria-pressed="${Boolean(meal.cooked)}" aria-label="${check}" title="${check}">✓</button>` : ''}</div>`;
+  }
+  openSlotDialog(date, slot, trigger) {
+    const {meal, recipe} = this.recipeFor(date, slot);
+    if (!meal || !recipe || this._saving) return;
+    const root = this.shadowRoot, revision = this.data.revision;
+    const spare = meal.cook_servings ? this.sparePortions(date, slot, meal) : 0;
+    const canCook = !meal.prepared_from && date <= this.data.today;
+    root.querySelector('dialog')?.remove();
+    const dialog = document.createElement('dialog');
+    dialog.setAttribute('aria-labelledby', 'slot-title');
+    dialog.innerHTML = `<h2 id="slot-title">${esc(recipe.name)}</h2>
+      <p class="muted">${esc(labelDate(date))}${this.slotCount(date)>1?` · Gericht ${slot+1}`:''} · ${esc(pretty(Number(meal.servings)))} Portionen</p>
+      <div class="picker-list">
+        <button type="button" data-slot-action="view">Rezept ansehen</button>
+        <button type="button" data-slot-action="edit">Portionen und Mealprep ändern</button>
+        <button type="button" data-slot-action="replace">Anderes Rezept wählen</button>
+        ${spare>0?'<button type="button" data-slot-action="leftover">Reste einplanen</button>':''}
+        ${canCook?`<button type="button" data-slot-action="cooked">${meal.cooked?'Gekocht · Rückgängig':'Als gekocht markieren'}</button>`:''}
+        <button type="button" class="danger" data-slot-action="remove">Aus dem Plan entfernen</button>
+      </div><p role="alert" id="slot-error"></p><button type="button" data-close>Schließen</button>`;
+    const error = dialog.querySelector('#slot-error');
+    // Hand over to the next dialog without the close handler stealing its focus.
+    const handOver = next => { dialog.remove(); next(); };
+    const apply = async (operation, payload) => {
+      if (!(await this.change(operation, payload, revision)) && dialog.isConnected) error.textContent = this._error;
+    };
+    let armed = false;
+    dialog.querySelectorAll('[data-slot-action]').forEach(button => button.onclick = () => {
+      switch (button.dataset.slotAction) {
+        case 'view': handOver(() => {this._recipeId = null; this.navigate('detail', date, slot);}); break;
+        case 'edit': handOver(() => this.openRecipeDialog(meal.recipe_id, trigger, true, {date, slot})); break;
+        case 'leftover': handOver(() => this.openRecipeDialog(meal.recipe_id, trigger, true, {date, slot}, true)); break;
+        case 'replace': handOver(() => this.openRecipePicker(date, slot, trigger, true)); break;
+        case 'cooked': apply('mark_cooked', {date, slot, cooked: !meal.cooked}); break;
+        case 'remove':
+          if (!armed) {armed = true; button.textContent = 'Wirklich entfernen?'; break;}
+          apply('set_meal', {date, slot, recipe_id: null, servings: meal.servings});
+          break;
+      }
+    });
+    dialog.querySelector('[data-close]').onclick = () => dialog.close();
+    dialog.addEventListener('close', () => {dialog.remove(); if (trigger?.isConnected) trigger.focus();});
+    root.append(dialog);
+    dialog.showModal();
   }
   detailHTML() {
+    const back = '<div class="actions back-row"><button type="button" data-back>← Zurück</button></div>';
     const stamp = this._selectedDate || new URLSearchParams(location.search).get('meal_date') || this.data.today;
     const slot = this._selectedSlot ?? Number(new URLSearchParams(location.search).get('meal_slot') || 0);
     const {meal,recipe} = this.recipeFor(stamp, slot);
     const direct = this._recipeId ? this.data.recipes[this._recipeId] : null;
     const r = direct || recipe;
-    if (!r) return '<h2>Noch kein Gericht geplant</h2><p>Wähle im Wochenplan ein Rezept aus.</p>';
+    if (!r) return `${back}<h2>Noch kein Gericht geplant</h2><p>Wähle im Wochenplan ein Rezept aus.</p>`;
     const servings = direct ? Number(r.servings) : Number(meal.servings);
     const factor = Number(meal?.cook_servings || servings)/Number(r.servings);
-    return `${r.image?`<img class="hero" src="${esc(r.image)}" alt="${esc(r.name)}">`:''}<h2>${esc(r.name)}</h2><p class="muted">${pretty(servings)} Portionen${direct?'':` · ${esc(labelDate(stamp))}${this.slotCount(stamp)>1?` · Gericht ${slot+1}`:''}`}</p>
+    return `${back}${r.image?`<img class="hero" src="${esc(r.image)}" alt="${esc(r.name)}">`:''}<h2>${esc(r.name)}</h2><p class="muted">${pretty(servings)} Portionen${direct?'':` · ${esc(labelDate(stamp))}${this.slotCount(stamp)>1?` · Gericht ${slot+1}`:''}`}</p>
       ${meal?.prepared_from?`<p>${esc(this.prepLabel(meal.prepared_from))}.</p>`:meal?.cook_servings?`<p>Zutaten für insgesamt ${esc(meal.cook_servings)} Kochportionen.</p>`:''}
       <h3>Zutaten</h3><ul>${(r.ingredients.length ? r.ingredients.map(i=>`<li>${i.quantity == null ? esc(i.name) : `${pretty(Number(i.quantity)*factor)} ${esc(i.unit)} ${esc(i.name)}`}</li>`).join('') : '<li>Keine Zutaten eingetragen</li>')}</ul>
       <h3>Zubereitung</h3>${r.steps.length ? '' : '<p>Keine Zubereitung eingetragen.</p>'}<ol>${r.steps.map(s=>`<li>${esc(s).replace(/\n/g,'<br>')}</li>`).join('')}</ol><p class="hint">Mengen sind auf die geplanten Portionen skaliert. Zeit- oder Mengenangaben im Zubereitungstext werden nicht automatisch umgeschrieben.</p>`;
@@ -375,6 +454,198 @@ class EssensplanCard extends HTMLElement {
   recipeMeta(r) {
     return `${r.minutes ? `${esc(r.minutes)} Min. · ` : 'Dauer nicht angegeben · '}${esc(r.servings)} Portionen`;
   }
+  nutritionHTML(recipe, showTotal = false) {
+    if (!this.data.modules?.nutrition) return '';
+    const nutrition=this.data.nutrition?.[recipe.id];
+    if (!nutrition?.used) return '<p class="hint">Nährwerte noch nicht berechenbar.</p>';
+    const format=values=>`${pretty(Math.round(values.kcal))} kcal · ${pretty(values.protein)} g Protein · ${pretty(values.carbs)} g Kohlenhydrate · ${pretty(values.fat)} g Fett`;
+    const missing=nutrition.missing.length;
+    return `<p class="hint"><strong>Pro Portion${missing?' · unvollständig':''}</strong><br>${format(nutrition.portion)}</p>
+      ${showTotal?`<p class="hint"><strong>Gesamtgericht${missing?' · unvollständig':''}</strong><br>${format(nutrition.total)}</p>
+      ${missing?`<p class="hint">Menge oder Zuordnung fehlt: ${esc(nutrition.missing.join(', '))}</p>`:''}`:''}`;
+  }
+  async openNutrition(id, trigger) {
+    if (!this.data.modules?.nutrition || this._saving) return;
+    const recipe=this.data.recipes[id], revision=this.data.revision;
+    if (!recipe?.ingredients.length) return;
+    const root=this.shadowRoot;
+    this._barcodeStop?.();
+    root.querySelector('dialog')?.remove();
+    const dialog=document.createElement('dialog');
+    dialog.setAttribute('aria-label','Nährwerte zuordnen');
+    dialog.innerHTML=`<h2>Nährwerte zuordnen</h2><p>${esc(recipe.name)}</p>
+      <p class="hint">Prüfe, ob das Lebensmittel zur Zutat passt, besonders roh oder gekocht.
+      Für Nährwerte pro 100 g kannst du bei Bedarf das Gesamtgewicht angeben.</p>
+      <p class="hint">Der Scan läuft lokal. Beim Produktabruf wird nur der Barcode an Open Food Facts gesendet.</p>
+      <form><div class="nutrition-rows"></div><p role="status" class="hint"></p>
+      <div class="actions"><button type="submit" disabled>Zuordnungen speichern</button><button type="button" data-close>Abbrechen</button></div></form>
+      <p class="hint">Quellen: Bundeslebensmittelschlüssel 4.0 (CC BY 4.0) und Open Food Facts (ODbL).</p>`;
+    const form=dialog.querySelector('form'), save=form.querySelector('[type=submit]'), status=form.querySelector('[role=status]');
+    const fields=[['kcal','Energie (kcal)'],['protein','Protein (g)'],['carbs','Kohlenhydrate (g)'],['fat','Fett (g)']];
+    const search=queries=>this._hass.callWS({type:'essensplan/nutrition_search',queries});
+    const stopCamera=()=>{
+      this._barcodeStop?.();
+      this._barcodeStop=null;
+    };
+    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.13.0');
+    const rows=recipe.ingredients.map(item=>{
+      const assigned=item.nutrition || {};
+      let product=assigned.product;
+      const row=document.createElement('fieldset');
+      row.innerHTML=`<legend>${esc(item.name)}${item.quantity?` · ${esc(item.quantity)} ${esc(item.unit)}`:''}</legend>
+        <div class="actions"><button type="button" data-camera>Barcode scannen</button>
+          <button type="button" data-photo>Barcode-Foto</button><button type="button" data-stop hidden>Kamera schließen</button></div>
+        <video class="barcode-video" autoplay playsinline muted hidden></video>
+        <input type="file" accept="image/*" capture="environment" hidden>
+        <label>EAN / UPC<input data-barcode inputmode="numeric" maxlength="14" value="${esc(product?.barcode ?? '')}"></label>
+        <button type="button" data-lookup>Produkt nachschlagen</button><p data-barcode-status class="hint" role="status"></p>
+        <label>Lebensmittel suchen<input type="search" maxlength="200" value="${esc(item.name)}"></label>
+        <button type="button" data-search>Suchen</button>
+        <label>Zuordnung<select><option value="">Offen lassen</option><option value="manual">Eigene Werte pro 100 g</option></select></label>
+        <p data-result class="hint" role="status"></p>
+        <div data-manual hidden>${fields.map(([key,label])=>`<label>${label}<input name="${key}" inputmode="decimal" value="${esc(assigned.values?.[key] ?? '')}"></label>`).join('')}</div>
+        <label>Gesamtgewicht dieser Zutat in Gramm (optional)<input name="grams" inputmode="decimal" value="${esc(assigned.grams ?? '')}"></label>`;
+      const select=row.querySelector('select'), feedback=row.querySelector('[data-result]');
+      const manual=row.querySelector('[data-manual]');
+      const grams=row.querySelector('[name=grams]');
+      const display=()=>{
+        manual.hidden=!['manual','product'].includes(select.value);
+        for (const input of manual.querySelectorAll('input')) input.required=!manual.hidden;
+        grams.disabled=select.value==='product' && product?.basis==='100ml';
+        grams.closest('label').hidden=grams.disabled;
+      };
+      const fill=(choices,current=select.value)=>{
+        const options=choices.map(choice=>new Option(choice.name,choice.code));
+        if (current && !['manual','product'].includes(current) && !choices.some(choice=>choice.code===current)) {
+          options.push(new Option(`Gespeicherter BLS-Eintrag (${current})`,current));
+        }
+        select.replaceChildren(new Option('Offen lassen',''), ...options, new Option('Eigene Werte pro 100 g','manual'));
+        if (product) select.add(new Option(`${product.name} · pro ${product.basis==='100ml'?'100 ml':'100 g'}`,'product'));
+        select.value=current;
+        display();
+        feedback.textContent=choices.length?`${choices.length} Vorschläge`:'Keine Treffer. Suche anders oder gib eigene Werte ein.';
+      };
+      let choices=[];
+      const updateChoices=(next,current=select.value)=>{choices=next;fill(next,current);};
+      fill([],assigned.code || (product?'product':assigned.values?'manual':''));
+      const video=row.querySelector('video'), stop=row.querySelector('[data-stop]');
+      const barcode=row.querySelector('[data-barcode]'), barcodeStatus=row.querySelector('[data-barcode-status]');
+      const camera=row.querySelector('[data-camera]'), file=row.querySelector('[type=file]');
+      const found=code=>{
+        if (!dialog.isConnected || !dialog.open) return;
+        stopCamera();
+        barcode.value=code;
+        barcodeStatus.textContent='Barcode erkannt. Tippe auf „Produkt nachschlagen“.';
+        barcode.focus();
+      };
+      const openPhoto=()=>{stopCamera();file.click();};
+      let usePhoto=!navigator.mediaDevices?.getUserMedia;
+      if (usePhoto) camera.textContent='Barcode fotografieren';
+      camera.onclick=async()=>{
+        if (usePhoto) {
+          openPhoto();
+          return;
+        }
+        stopCamera();
+        const controller=new AbortController();
+        let stream;
+        this._barcodeStop=()=>{
+          controller.abort();
+          stream?.getTracks().forEach(track=>track.stop());
+          video.hidden=stop.hidden=true;
+          camera.disabled=false;
+        };
+        camera.disabled=true;
+        stop.hidden=false;
+        barcodeStatus.textContent='Kamera wird geöffnet …';
+        try {
+          // Ask before loading the decoder so the request starts in the tap handler.
+          stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+          if (controller.signal.aborted) {
+            stream.getTracks().forEach(track=>track.stop());
+            return;
+          }
+          const decoder=await scanner();
+          if (controller.signal.aborted) return;
+          video.hidden=false;
+          barcodeStatus.textContent='Halte den Barcode in die Kamera.';
+          await decoder.scanCamera(stream,video,controller.signal,found);
+        } catch(err) {
+          if (controller.signal.aborted) return;
+          stopCamera();
+          usePhoto=true;
+          camera.textContent='Barcode fotografieren';
+          barcodeStatus.textContent=err.name==='NotAllowedError'
+            ? 'Kamerazugriff verweigert. Tippe auf „Barcode fotografieren“ oder gib den Code ein.'
+            : 'Live-Kamera konnte nicht gestartet werden. Tippe auf „Barcode fotografieren“ oder gib den Code ein.';
+          camera.focus();
+        }
+      };
+      stop.onclick=stopCamera;
+      row.querySelector('[data-photo]').onclick=openPhoto;
+      file.onchange=async()=>{
+        const image=file.files[0];
+        file.value='';
+        if (!image) return;
+        barcodeStatus.textContent='Barcode wird lokal gelesen …';
+        try {found(await (await scanner()).scanPhoto(image));}
+        catch(err) {barcodeStatus.textContent=err.message;}
+      };
+      const lookup=row.querySelector('[data-lookup]');
+      lookup.onclick=async()=>{
+        lookup.disabled=true;
+        barcodeStatus.textContent='Produkt wird gesucht …';
+        try {
+          const match=await this._hass.callWS({type:'essensplan/barcode_lookup',barcode:barcode.value.trim()});
+          product=match.product;
+          for (const [key] of fields) row.querySelector(`[name=${key}]`).value=match.values[key];
+          fill(choices,'product');
+          barcodeStatus.textContent=`${product.name} gefunden. Prüfe die Angaben pro ${product.basis==='100ml'?'100 ml':'100 g'} und speichere die Zuordnung.`;
+        } catch(err) {barcodeStatus.textContent=err.message || 'Produktabruf fehlgeschlagen.';}
+        finally {lookup.disabled=false;}
+      };
+      barcode.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();lookup.click();}};
+      select.onchange=display;
+      const button=row.querySelector('[data-search]'), input=row.querySelector('[type=search]');
+      button.onclick=async()=>{
+        button.disabled=true;
+        try {const [results]=await search([input.value]);updateChoices(results);}
+        catch (err) {feedback.textContent=err.message || 'Suche fehlgeschlagen.';}
+        finally {button.disabled=false;}
+      };
+      input.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();button.click();}};
+      form.querySelector('.nutrition-rows').append(row);
+      return {row,select,fill:updateChoices,getProduct:()=>product};
+    });
+    form.onsubmit=async event=>{
+      event.preventDefault();
+      stopCamera();
+      const assignments=rows.map(({row,select,getProduct})=>{
+        if (!select.value) return null;
+        const grams=row.querySelector('[name=grams]').value.trim();
+        if (!['manual','product'].includes(select.value)) return {code:select.value,grams};
+        const values=Object.fromEntries(fields.map(([key])=>[key,row.querySelector(`[name=${key}]`).value.trim()]));
+        return select.value==='product'?{values,grams,product:getProduct()}:{values,grams};
+      });
+      save.disabled=true;
+      if (!(await this.change('set_nutrition',{id,assignments},revision))) {
+        status.textContent=this._error;
+        save.disabled=false;
+      }
+    };
+    dialog.querySelector('[data-close]').onclick=()=>dialog.close();
+    dialog.addEventListener('close',()=>{stopCamera();dialog.remove();if(trigger?.isConnected)trigger.focus();});
+    root.append(dialog);
+    dialog.showModal();
+    status.textContent='Vorschläge werden geladen …';
+    try {
+      const results=await search(recipe.ingredients.map(item=>item.name));
+      results.forEach((choices,index)=>rows[index].fill(choices));
+      status.textContent='';
+    } catch (err) {
+      status.textContent=err.message || 'Vorschläge konnten nicht geladen werden.';
+    } finally {save.disabled=false;}
+  }
   recipesHTML() {
     const calendar = '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-9 2v7m-3.5-3.5h7"/>';
     const book = '<path d="M12 6v15M3 5c4-1 7 0 9 2 2-2 5-3 9-2v14c-4-1-7 0-9 2-2-2-5-3-9-2z"/>';
@@ -385,7 +656,7 @@ class EssensplanCard extends HTMLElement {
       <p id="recipe-match-count" class="muted" aria-live="polite"></p>
       <div class="recipe-grid">${Object.values(this.data.recipes).map(r=>`<article class="recipe-card" data-recipe-card="${esc(r.id)}">
       <div class="recipe-media">${this.recipeImage(r)}<div class="bubbles">${bubble('schedule',r.id,`${r.name} einplanen`,calendar)}${bubble('recipe',r.id,`Rezeptdetails: ${r.name}`,book)}</div></div>
-      <div class="recipe-info"><h3>${esc(r.name)}</h3><small>${this.recipeMeta(r)}</small><div class="actions"><button data-favorite="${esc(r.id)}" aria-pressed="${Boolean(r.favorite)}">${r.favorite?'★ Favorit':'☆ Favorit'}</button><button data-edit="${esc(r.id)}">Bearbeiten</button><button class="danger" data-delete="${esc(r.id)}">Löschen</button></div></div></article>`).join('')}</div>
+      <div class="recipe-info"><h3>${esc(r.name)}</h3><small>${this.recipeMeta(r)}</small>${this.nutritionHTML(r)}<div class="actions">${this.data.modules?.nutrition && r.ingredients.length?`<button data-nutrition="${esc(r.id)}">Nährwerte zuordnen</button>`: ''}<button data-favorite="${esc(r.id)}" aria-pressed="${Boolean(r.favorite)}">${r.favorite?'★ Favorit':'☆ Favorit'}</button><button data-edit="${esc(r.id)}">Bearbeiten</button><button class="danger" data-delete="${esc(r.id)}">Löschen</button></div></div></article>`).join('')}</div>
       ${Object.keys(this.data.recipes).length?'':'<p>Hier entsteht eure persönliche Rezeptsammlung. Bilder sind optional.</p>'}`;
   }
   openRecipeDialog(id, trigger, schedule = false, editMeal, openLeftover = false) {
@@ -397,8 +668,9 @@ class EssensplanCard extends HTMLElement {
     const revision = this.data.revision;
     const previous = root.querySelector('dialog');
     if (previous) previous.remove();
-    const current=editMeal ? this.mealsFor(editMeal.date)[editMeal.slot] : null;
-    dialog.innerHTML = schedule ? `<h2 id="recipe-dialog-title">${esc(r.name)} einplanen</h2><form>
+    const existing=editMeal ? this.mealsFor(editMeal.date)[editMeal.slot] : null;
+    const current=existing && existing.recipe_id===id ? existing : null;
+    dialog.innerHTML = schedule ? `<h2 id="recipe-dialog-title">${esc(r.name)} ${current?'ändern':'einplanen'}</h2><form>
       <label for="plan-date">Datum</label><input required type="date" id="plan-date" value="${esc(editMeal?.date || this.data.today)}" ${editMeal?'readonly':''}>
       <label for="plan-slot">Platz im Tagesplan</label><select id="plan-slot" ${editMeal?'disabled':''}></select>
       <label for="plan-servings">Portionen an diesem Platz</label><input required type="number" min="0.1" max="100" step="0.1" id="plan-servings" value="${esc(current?.servings || r.servings)}">
@@ -413,8 +685,8 @@ class EssensplanCard extends HTMLElement {
         <button type="button" id="plan-remove-leftover">Termin weglassen</button>
       </fieldset></div>
       <label id="replace-meal" hidden><input type="checkbox"> Belegten Platz ersetzen</label>
-      <p role="alert" id="dialog-error"></p><div class="actions"><button type="submit" class="primary">Einplanen</button><button type="button" data-close>Abbrechen</button></div></form>` :
-      `<div class="recipe-media detail-cover">${this.recipeImage(r)}</div><h2 id="recipe-dialog-title">${esc(r.name)}</h2><p class="muted">${this.recipeMeta(r)}</p>
+      <p role="alert" id="dialog-error"></p><div class="actions"><button type="submit" class="primary">${current?'Speichern':'Einplanen'}</button><button type="button" data-close>Abbrechen</button></div></form>` :
+      `<div class="recipe-media detail-cover">${this.recipeImage(r)}</div><h2 id="recipe-dialog-title">${esc(r.name)}</h2><p class="muted">${this.recipeMeta(r)}</p>${this.nutritionHTML(r,true)}
       <h3>Zutaten</h3><ul>${(r.ingredients.length ? r.ingredients.map(i=>`<li>${i.quantity == null ? esc(i.name) : `${pretty(Number(i.quantity))} ${esc(i.unit)} ${esc(i.name)}`}</li>`).join('') : '<li>Keine Zutaten eingetragen</li>')}</ul>
       <h3>Zubereitung</h3>${r.steps.length ? '' : '<p>Keine Zubereitung eingetragen.</p>'}<ol>${r.steps.map(step=>`<li>${esc(step).replace(/\n/g,'<br>')}</li>`).join('')}</ol>
       <div class="actions"><button class="primary" data-plan>Einplanen</button><button data-close>Schließen</button></div>`;
@@ -439,7 +711,7 @@ class EssensplanCard extends HTMLElement {
         const selected=leftoverSlot.value;
         const options=Array.from({length:this.data.meals_per_day || 1},(_,i)=>i).filter(i=>
           (leftoverDate.value>date.value || leftoverDate.value===date.value && i>Number(slot.value)) &&
-          !this.mealsFor(leftoverDate.value)[i] && !this._mealDrafts?.[`${leftoverDate.value}/${i}`]);
+          !this.mealsFor(leftoverDate.value)[i]);
         leftoverSlot.innerHTML=options.length?options.map(i=>`<option value="${i}">Gericht ${i+1}</option>`).join(''):
           '<option value="">Kein freier späterer Platz</option>';
         if (options.some(i=>String(i)===selected)) leftoverSlot.value=selected;
@@ -560,8 +832,10 @@ class EssensplanCard extends HTMLElement {
     dialog.showModal();
   }
   clearOcrPreview() {
-    if (this._ocrPreviewUrl) URL.revokeObjectURL(this._ocrPreviewUrl);
-    this._ocrPreviewUrl=null;
+    this._ocrAbort?.abort();
+    this._ocrAbort=null;
+    for (const url of this._ocrPreviewUrls || []) URL.revokeObjectURL(url);
+    this._ocrPreviewUrls=[];
   }
   clearImagePreview() {
     if (this._imagePreviewUrl) URL.revokeObjectURL(this._imagePreviewUrl);
@@ -579,17 +853,29 @@ class EssensplanCard extends HTMLElement {
     return `/api/image/serve/${uploaded.id}/original`;
   }
   editor(id) {
+    this.clearOcrPreview();
     this.clearImagePreview();
     const r = this.data.recipes[id] || {name:'',servings:4,image:'',ingredients:[],steps:[]};
     this._editId = id || null;
     this._editRevision = this.data.revision;
     this.shadowRoot.querySelector('ha-card').innerHTML = `<h2>${id?'Rezept bearbeiten':'Neues Rezept'}</h2><div id="error" role="alert"></div><form>
-      <div class="actions"><button type="button" id="choose-screenshot">Zutaten aus Screenshot übernehmen</button></div>
-      <input id="recipe-screenshot" type="file" accept="image/png,image/jpeg,image/webp" aria-label="Rezept-Screenshot auswählen" hidden>
+      <div class="actions"><button type="button" id="choose-screenshot">Rezept aus Screenshots</button></div>
+      <input id="recipe-screenshot" type="file" multiple accept="image/png,image/jpeg,image/webp" aria-label="Bis zu drei Rezept-Screenshots auswählen" hidden>
+      <div id="ocr-order" hidden><p class="hint">Sortiere die Bilder in Lesereihenfolge.</p><ol id="ocr-files"></ol>
+        <button type="button" id="ocr-read">Screenshots lesen</button><button type="button" id="ocr-clear-files">Auswahl verwerfen</button></div>
       <p class="hint" id="ocr-status" role="status"></p>
-      <div id="ocr-review" hidden><div class="ocr-columns"><img id="ocr-preview" hidden alt="Ausschnitt der Zutatenliste"><div><label for="ocr-text">Erkannte Zutaten · eine pro Zeile</label>
-      <textarea id="ocr-text"></textarea><ul id="ocr-flags" class="hint" aria-live="polite" hidden></ul></div></div><p id="ocr-diff" class="hint"></p><button type="button" id="apply-ocr">Neue Zutaten hinzufügen</button>
-      <p class="hint">Vorhandene Zutaten und ihre Mengen bleiben erhalten.</p></div>
+      <div id="ocr-review" hidden>
+        <div id="ocr-ingredients-panel"><div class="ocr-columns"><div id="ocr-ingredient-images"><img id="ocr-preview" hidden alt="Ausschnitt der Zutatenliste"></div>
+          <div><label for="ocr-text">Erkannte Zutaten · eine pro Zeile</label><textarea id="ocr-text"></textarea>
+          <ul id="ocr-flags" class="hint" aria-live="polite" hidden></ul><p id="ocr-diff" class="hint"></p></div></div></div>
+        <div id="ocr-steps-panel"><div class="ocr-columns"><div id="ocr-step-images"></div>
+          <div><label for="ocr-steps">Erkannte Zubereitung · ein Schritt pro Zeile</label><textarea id="ocr-steps"></textarea>
+          <p id="ocr-step-hint" class="hint" hidden></p></div></div></div>
+        <div class="actions"><button type="button" id="apply-ocr">Neue Zutaten hinzufügen</button>
+          <button type="button" id="apply-ocr-steps">Zubereitung ergänzen</button>
+          <button type="button" id="apply-ocr-both">Beides übernehmen</button>
+          <button type="button" id="cancel-ocr">Vorschau verwerfen</button></div>
+        <p class="hint">Vorhandene Zutaten und Zubereitungsschritte bleiben erhalten.</p></div>
       <label for="name">Rezeptname</label><input id="name" required maxlength="200" value="${esc(r.name)}">
       <label for="servings">Portionen im Grundrezept</label><input id="servings" type="number" min="0.1" max="100" step="0.1" required value="${esc(r.servings)}">
       <label for="minutes">Zubereitungsdauer in Minuten (optional)</label><input id="minutes" type="number" min="1" max="1440" step="1" value="${esc(r.minutes ?? '')}">
@@ -646,9 +932,19 @@ class EssensplanCard extends HTMLElement {
     {
       const screenshot=field('recipe-screenshot'), choose=field('choose-screenshot'), status=field('ocr-status');
       const review=field('ocr-review'), raw=field('ocr-text');
-      const crop=field('ocr-preview'), flagsList=field('ocr-flags');
-      let ocr, flags=[];
-      const resetCrop=()=>{crop.removeAttribute('src');crop.hidden=true;this.clearOcrPreview();};
+      const crop=field('ocr-preview'), flagsList=field('ocr-flags'), stepsDraft=field('ocr-steps');
+      const order=field('ocr-order'), fileList=field('ocr-files');
+      let ocr, flags=[], files=[];
+      const resetReview=()=>{
+        review.hidden=true;
+        raw.value=stepsDraft.value='';
+        flags=[];
+        crop.removeAttribute('src');
+        crop.hidden=true;
+        field('ocr-ingredient-images').replaceChildren(crop);
+        field('ocr-step-images').replaceChildren();
+        this.clearOcrPreview();
+      };
       const ingredientKey=name=>name.normalize('NFKC').toLocaleLowerCase('de').trim().replace(/\s+/g,' ');
       const previewItems=()=>{
         const lines=raw.value.slice(0,16000).split(/\r?\n/).map(line=>line.trim());
@@ -668,54 +964,123 @@ class EssensplanCard extends HTMLElement {
       raw.oninput=previewItems;
       ingredients.addEventListener('input',()=>{if(!review.hidden) previewItems();});
       choose.onclick=()=>screenshot.click();
-      screenshot.onchange=async()=>{
-        const file=screenshot.files[0];
-        screenshot.value='';
-        if (!file || saving) return;
-        choose.disabled=true;
-        resetCrop();
-        flags=[];
-        review.hidden=true;
-        status.textContent='Screenshot wird auf diesem Gerät gelesen …';
-        try {
-          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.8.0');
-          const recognized=await ocr.recognizeRecipe(file, progress=>{
-            if (form.isConnected) status.textContent=`Screenshot wird lokal gelesen … ${progress} %`;
-          });
-          if (!form.isConnected) return;
-          const {lines:found,preview,uncertain}=recognized;
-          flags=uncertain;
-          if (preview) {
-            this._ocrPreviewUrl=URL.createObjectURL(preview);
-            crop.src=this._ocrPreviewUrl;
-            crop.hidden=false;
+      const renderOrder=(focusIndex, direction)=>{
+        order.hidden=!files.length;
+        fileList.replaceChildren(...files.map((file,index)=>{
+          const li=document.createElement('li');
+          li.textContent=file.name+' ';
+          for (const move of [-1,1]) {
+            const button=document.createElement('button');
+            button.type='button';
+            button.textContent=move<0?'↑':'↓';
+            button.setAttribute('aria-label',`Bild ${index+1} nach ${move<0?'oben':'unten'}`);
+            const target=index+move;
+            button.disabled=target<0 || target>=files.length;
+            button.onclick=()=>{
+              [files[index],files[target]]=[files[target],files[index]];
+              renderOrder(target,move);
+            };
+            li.append(button);
           }
-          if (!found.length) throw new Error('Keine Zutatenliste erkannt. Wähle einen Ausschnitt mit der Überschrift „Zutaten“ oder nur der Liste.');
-          raw.value=found.join('\n');
+          return li;
+        }));
+        if (focusIndex!=null) {
+          const buttons=[...fileList.children[focusIndex].querySelectorAll('button:not(:disabled)')];
+          (buttons[direction>0?buttons.length-1:0] || field('ocr-read')).focus();
+        }
+      };
+      const recognize=async()=>{
+        if (!files.length || saving) return;
+        const selected=files;
+        files=[];
+        renderOrder();
+        resetReview();
+        const controller=new AbortController();
+        this._ocrAbort=controller;
+        const active=()=>form.isConnected && !controller.signal.aborted;
+        choose.disabled=true;
+        status.textContent='Screenshots werden lokal gelesen …';
+        try {
+          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.13.0');
+          const result=await ocr.recognizeRecipe(selected,(page,progress)=>{
+            if (active()) status.textContent=`Bild ${page} von ${selected.length} wird lokal gelesen … ${progress} %`;
+          },controller.signal);
+          if (!active()) return;
+          if (!result.lines.length && !result.steps.length) {
+            throw new Error('Keine Zutaten oder Zubereitung erkannt. Wähle möglichst einen Ausschnitt mit der passenden Überschrift.');
+          }
+          flags=result.uncertain;
+          for (const {kind,index,preview} of result.previews) {
+            const image=kind==='ingredients' && crop.hidden?crop:document.createElement('img');
+            image.alt=`${kind==='ingredients'?'Zutaten':'Zubereitung'} · Bild ${index+1}`;
+            const url=URL.createObjectURL(preview);
+            this._ocrPreviewUrls.push(url);
+            image.src=url;
+            image.hidden=false;
+            field(kind==='ingredients'?'ocr-ingredient-images':'ocr-step-images').append(image);
+          }
+          raw.value=result.lines.join('\n');
+          stepsDraft.value=result.steps.join('\n');
+          field('ocr-ingredients-panel').hidden=field('apply-ocr').hidden=!result.lines.length;
+          field('ocr-steps-panel').hidden=field('apply-ocr-steps').hidden=!result.steps.length;
+          field('apply-ocr-both').hidden=!(result.lines.length && result.steps.length);
+          const hint=field('ocr-step-hint');
+          hint.hidden=!result.uncertainSteps.length;
+          hint.textContent=result.uncertainSteps.length?`Bitte prüfe diese Textstellen oder Fortsetzungen: ${[...new Set(result.uncertainSteps)].join(' · ')}`:'';
           review.hidden=false;
           previewItems();
-          status.textContent=`${found.length} Zutatenzeilen erkannt. Du kannst sie vor dem Übernehmen korrigieren.`;
+          status.textContent=`${result.lines.length} Zutatenzeilen und ${result.steps.length} Schritte erkannt. Prüfe den Text vor dem Übernehmen.`;
         } catch (error) {
-          if (form.isConnected) status.textContent=error.message || 'Screenshot konnte nicht gelesen werden.';
-        } finally { if (form.isConnected) choose.disabled=false; }
+          if (active()) status.textContent=error.message || 'Screenshots konnten nicht gelesen werden.';
+        } finally { if (active()) choose.disabled=false; }
       };
-      field('apply-ocr').onclick=()=>{
+      screenshot.onchange=()=>{
+        const selected=[...screenshot.files];
+        screenshot.value='';
+        if (!selected.length || saving) return;
+        resetReview();
+        files=selected.length<=3?selected:[];
+        renderOrder();
+        if (!files.length) status.textContent='Wähle höchstens drei Screenshots auf einmal.';
+        else if (files.length===1) recognize();
+        else {status.textContent='';field('ocr-read').focus();}
+      };
+      field('ocr-read').onclick=recognize;
+      field('ocr-clear-files').onclick=()=>{files=[];renderOrder();choose.focus();};
+      field('cancel-ocr').onclick=()=>{resetReview();status.textContent='Vorschau verworfen.';choose.focus();};
+      const apply=(withIngredients,withSteps)=>{
         if (!ocr || saving) return;
-        const draft=previewItems();
-        if (!draft.length) {
-          status.textContent='Keine neuen Zutaten zum Übernehmen.';
+        const editorSteps=field('steps');
+        const current=editorSteps.value.split('\n').filter(line=>line.trim());
+        const known=new Set(current.map(ingredientKey));
+        const newSteps=withSteps?stepsDraft.value.split('\n').map(line=>line.trim()).filter(line=>
+          line && !known.has(ingredientKey(line))):[];
+        if (current.length+newSteps.length>100 || newSteps.some(step=>step.length>4000)) {
+          status.textContent='Kürze die Vorschau. Ein Rezept erlaubt 100 Schritte mit je höchstens 4.000 Zeichen.';
           return;
         }
-        for (const row of [...ingredients.children]) if (![...row.querySelectorAll('input,select')].some(el=>el.value.trim())) row.remove();
+        const draft=withIngredients?previewItems():[];
+        if (!draft.length && !newSteps.length) {
+          status.textContent='Keine neuen Zutaten oder Schritte zum Übernehmen.';
+          return;
+        }
+        if (draft.length) for (const row of [...ingredients.children]) {
+          if (![...row.querySelectorAll('input,select')].some(el=>el.value.trim())) row.remove();
+        }
         const added=draft.slice(0,100-ingredients.childElementCount);
         added.forEach(item=>appendIngredient({...item,name:item.name.slice(0,200)}));
-        status.textContent=`${added.length} neue Zutaten übernommen.${added.length<draft.length?' Höchstens 100 Zutaten passen in ein Rezept.':''} Prüfe Mengen und Einheiten.`;
-        review.hidden=true;
-        raw.value='';
-        flags=[];
-        resetCrop();
-        ingredients.querySelector('[data-name]')?.focus();
+        if (newSteps.length) {
+          const separator=editorSteps.value && !editorSteps.value.endsWith('\n')?'\n':'';
+          editorSteps.value+=separator+newSteps.join('\n');
+        }
+        status.textContent=`${added.length} neue Zutaten und ${newSteps.length} Schritte übernommen.${added.length<draft.length?' Höchstens 100 Zutaten passen in ein Rezept.':''}`;
+        resetReview();
+        if (newSteps.length) editorSteps.focus();
+        else ingredients.querySelector('[data-name]')?.focus();
       };
+      field('apply-ocr').onclick=()=>apply(true,false);
+      field('apply-ocr-steps').onclick=()=>apply(false,true);
+      field('apply-ocr-both').onclick=()=>apply(true,true);
     }
     const busy=value=>{chooseImage.disabled=value;removeImage.disabled=value;saveButton.disabled=value;};
     field('cancel').onclick = ()=>this.render();
@@ -817,28 +1182,20 @@ class EssensplanCard extends HTMLElement {
       const id=el.dataset.favorite;this.change('favorite',{id,favorite:!this.data.recipes[id].favorite});
     });
     root.querySelectorAll('[data-amount]').forEach(el=>el.onclick=()=>this.shoppingAmount(el.dataset.amount,el));
-    root.querySelectorAll('[data-pick-slot]').forEach(el=>el.onclick=()=>this.openRecipePicker(el.dataset.pickSlot,Number(el.dataset.slot),el));
+    root.querySelectorAll('[data-slot-open]').forEach(el=>el.onclick=()=>{
+      const date=el.dataset.slotOpen,slot=Number(el.dataset.slot);
+      if (this.mealsFor(date)[slot]) this.openSlotDialog(date,slot,el); else this.openRecipePicker(date,slot,el);
+    });
     root.querySelectorAll('[data-cooked]').forEach(el=>el.onclick=()=>{
-      const date=el.dataset.cooked,slot=Number(el.dataset.slot);
-      if (this._mealDrafts?.[`${date}/${slot}`]) {
-        root.querySelector('#error').textContent='Speichere zuerst die Änderungen an diesem Platz.';
-        return;
-      }
-      this.change('mark_cooked',{date,slot,cooked:el.getAttribute('aria-pressed')!=='true'});
+      this.change('mark_cooked',{date:el.dataset.cooked,slot:Number(el.dataset.slot),cooked:el.getAttribute('aria-pressed')!=='true'});
     });
-    root.querySelectorAll('[data-meal-prep]').forEach(el=>el.onclick=()=>{
-      const date=el.dataset.mealPrep, slot=Number(el.dataset.slot), meal=this.mealsFor(date)[slot];
-      if (this._mealDrafts?.[`${date}/${slot}`]) {
-        root.querySelector('#error').textContent='Speichere zuerst die Änderungen an diesem Platz.';
-        return;
-      }
-      if(meal) this.openRecipeDialog(meal.recipe_id,el,true,{date,slot},el.hasAttribute('data-leftover'));
-    });
+    root.querySelectorAll('[data-back]').forEach(el=>el.onclick=()=>{this._recipeId=null;this.navigate(this.backMode());});
     root.querySelectorAll('[data-mode]').forEach(el=>el.onclick=()=>{this._recipeId=null;this.navigate(el.dataset.mode);});
     root.querySelectorAll('[data-shift]').forEach(el=>el.onclick=()=>{this.week=offsetDay(this.week,Number(el.dataset.shift));this.render();});
     root.querySelectorAll('[data-detail]').forEach(el=>el.onclick=()=>{this._recipeId=null;this.navigate('detail',el.dataset.detail,Number(el.dataset.slot || 0));});
     this.bindRecipeImages(root);
     root.querySelectorAll('[data-recipe]').forEach(el=>el.onclick=()=>this.openRecipeDialog(el.dataset.recipe,el));
+    root.querySelectorAll('[data-nutrition]').forEach(el=>el.onclick=()=>this.openNutrition(el.dataset.nutrition,el));
     root.querySelectorAll('[data-schedule]').forEach(el=>el.onclick=()=>this.openRecipeDialog(el.dataset.schedule,el,true));
     root.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>this.editor(el.dataset.edit));
     root.querySelectorAll('[data-delete]').forEach(el=>el.onclick=()=>{if(window.confirm('Dieses Rezept löschen?'))this.change('delete_recipe',{id:el.dataset.delete});});
@@ -849,24 +1206,8 @@ class EssensplanCard extends HTMLElement {
         case 'week': this.navigate('week'); break;
         case 'new': this.editor(); break;
         case 'this-week': this.week=monday(this.data.today);this.render();break;
-        case 'reload-plan': this._mealDrafts={};this._error='';await this.load();this.render();break;
         case 'shopping-week': if(await this.change('shopping_week',{date:this.week}))this.navigate('shopping');break;
       }
-    });
-    root.querySelectorAll('form[data-meal-slot]').forEach(form=>{
-      const stamp=form.closest('[data-date]').dataset.date, slot=Number(form.dataset.mealSlot);
-      const input=form.querySelector('input'), select=form.querySelector('select');
-      const remember=()=>{
-        this._mealDrafts ||= {};
-        this._mealDrafts[`${stamp}/${slot}`]={recipe_id:select.value,servings:input.value,revision:Number(form.dataset.revision)};
-      };
-      select.onchange=remember;input.oninput=remember;
-      form.onsubmit=async event=>{
-        event.preventDefault();
-        if (!form.reportValidity()) return;
-        remember();
-        await this.change('set_meal',{date:stamp,slot,recipe_id:select.value||null,servings:input.value},Number(form.dataset.revision));
-      };
     });
     // Don't replace a focused week selector or portion input on background updates.
     root.querySelectorAll('select,input').forEach(el=>{
@@ -884,7 +1225,16 @@ class EssensplanCard extends HTMLElement {
       tile.onpointermove=e=>{if(start&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>12){cancel();held=true;}};
       tile.onpointerup=cancel;tile.onpointercancel=()=>{cancel();held=true;};tile.onpointerleave=cancel;
       tile.oncontextmenu=e=>e.preventDefault();
-      tile.onclick=()=>{cancel();if(!held){this._recipeId=null;this.navigate(this.recipeFor(this.data.today,slot).recipe?'detail':'week',this.data.today,slot);}held=false;};
+      tile.onclick=()=>{
+        cancel();
+        if(!held){
+          this._recipeId=null;
+          if(this.recipeFor(this.data.today,slot).recipe) this.navigate('detail',this.data.today,slot);
+          else if(Object.keys(this.data.recipes).length) this.openRecipePicker(this.data.today,slot,tile);
+          else this.navigate('recipes');
+        }
+        held=false;
+      };
     });
   }
 }

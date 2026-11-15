@@ -1,50 +1,47 @@
 # Optionales eigenes Dashboard, URL: /essensplan-plan
 # Unter Einstellungen → Dashboards ein leeres Dashboard mit URL „essensplan-plan“
 # erstellen und diesen Inhalt in dessen Rohkonfigurationseditor einsetzen.
+# Die Karte bringt ihre eigene Navigation (Heute, Woche, Rezepte, Einkauf) mit.
+# Deshalb gibt es nur eine sichtbare Ansicht. Die Unterseiten halten Verknüpfungen
+# wie /essensplan-plan/woche lauffähig und erscheinen nicht als Tabs.
 title: Essensplan
 background:
   image: /essensplan_static/dashboard-background.svg?v=0.6.3
   opacity: 100
   size: cover
 views:
-  - title: Heute
+  - title: Essensplan
     path: heute
-    icon: mdi:food-fork-drink
+    icon: mdi:silverware-fork-knife
     cards:
       - type: custom:essensplan-card
         mode: today
         title: Heute auf dem Tisch
-        view_paths: &essensplan_tabs
-          today: /essensplan-plan/heute
-          week: /essensplan-plan/woche
-          detail: /essensplan-plan/rezept
-          recipes: /essensplan-plan/rezepte
-          shopping: /essensplan-plan/einkauf
   - title: Wochenplan
     path: woche
-    icon: mdi:calendar-week
+    subview: true
+    back_path: /essensplan-plan/heute
     cards:
       - type: custom:essensplan-card
         mode: week
-        view_paths: *essensplan_tabs
   - title: Rezept
     path: rezept
     subview: true
+    back_path: /essensplan-plan/heute
     cards:
       - type: custom:essensplan-card
         mode: detail
-        view_paths: *essensplan_tabs
   - title: Rezepte
     path: rezepte
-    icon: mdi:book-open-variant
+    subview: true
+    back_path: /essensplan-plan/heute
     cards:
       - type: custom:essensplan-card
         mode: recipes
-        view_paths: *essensplan_tabs
   - title: Einkauf
     path: einkauf
-    icon: mdi:cart
+    subview: true
+    back_path: /essensplan-plan/heute
     cards:
       - type: custom:essensplan-card
         mode: shopping
-        view_paths: *essensplan_tabs
