@@ -29,6 +29,22 @@ class ModelTests(unittest.TestCase):
     def plan(self, rid, date=TODAY, servings=4):
         self.change('set_meal', {'date':date,'recipe_id':rid,'servings':servings})
 
+    def test_cooked_status_persists_without_changing_shopping(self):
+        rid = self.add()
+        batch = {'date': TODAY, 'slot': 0, 'recipe_id': rid, 'servings': '2', 'cook_servings': '6'}
+        target = {'date': '2026-10-16', 'slot': 0, 'servings': '4'}
+        self.change('set_meal', {**batch, 'leftover': target})
+        original = model.shopping(self.state, TODAY)
+        self.change('mark_cooked', {'date': TODAY, 'slot': 0, 'cooked': True})
+        self.assertTrue(model.normalize_state(self.state)['plan'][TODAY][0]['cooked'])
+        self.assertEqual(model.shopping(self.state, TODAY), original)
+        self.change('set_meal', batch)
+        self.assertTrue(self.state['plan'][TODAY][0]['cooked'])
+        with self.assertRaises(ValueError):
+            self.change('mark_cooked', {**target, 'cooked': True})
+        self.change('set_meal', {**batch, 'cook_servings': '7'})
+        self.assertNotIn('cooked', self.state['plan'][TODAY][0])
+
     def test_portions_and_compatible_units(self):
         a=self.add(); b=self.add(name='Pfanne',quantity='1',unit='kg',ingredient='HÄHNCHEN')
         self.plan(a,servings=2); self.plan(b,date='2026-10-16')

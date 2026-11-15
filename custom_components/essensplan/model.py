@@ -213,6 +213,10 @@ def mutate(state, operation, payload, today, meals_per_day=1):
             if cook is not None and cook != '':
                 quantity = number(cook, minimum=Decimal(meal['servings']), maximum=Decimal(100))
                 meal['cook_servings'] = str(quantity)
+            if (old.get('cooked') and prepared is None and
+                    Decimal(old.get('cook_servings', old['servings'])) ==
+                    Decimal(meal.get('cook_servings', meal['servings']))):
+                meal['cooked'] = True
         meals.extend([None] * (slot + 1 - len(meals)))
         meals[slot] = meal
         # Trim trailing gaps only; removing lunch must never move dinner.
@@ -242,6 +246,21 @@ def mutate(state, operation, payload, today, meals_per_day=1):
         validate_prepared_meals(result['plan'])
         # Editing a week automatically makes it the shopping week.
         result['shopping_week'] = monday(meal['prepared_from']['date'] if meal and 'prepared_from' in meal else stamp)
+    elif operation == 'mark_cooked':
+        stamp, slot = payload['date'], payload['slot']
+        day(stamp)
+        meals = result['plan'].get(stamp, [])
+        if type(slot) is not int or not 0 <= slot < len(meals):
+            raise ValueError('Ungültiger Kochplatz.')
+        meal = meals[slot]
+        if not meal or 'prepared_from' in meal or type(payload.get('cooked')) is not bool:
+            raise ValueError('Nur frisch geplante Gerichte können als gekocht markiert werden.')
+        if payload['cooked']:
+            if stamp > today:
+                raise ValueError('Ein zukünftiger Kochtag kann noch nicht abgehakt werden.')
+            meal['cooked'] = True
+        else:
+            meal.pop('cooked', None)
     elif operation == 'shopping_week':
         result['shopping_week'] = monday(payload['date'])
     elif operation == 'shopping_amount':

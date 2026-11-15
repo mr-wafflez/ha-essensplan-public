@@ -1,5 +1,12 @@
 # Änderungen
 
+## 0.8.0
+
+- Rezeptwahl direkt in freien Wochenplanplätzen mit Suche, Favoriten und Kochverlauf.
+- Mealprep zeigt freie Restportionen, bietet einen direkten Einplanungsdialog und unterscheidet geplante von vorbereiteten Resten.
+- Lokale Screenshot-Prüfung mit Bildausschnitt und Hinweisen für unsichere Zutatenzeilen.
+- GitHub Actions prüft und baut das Installations-ZIP. Die README zeigt drei Beispiele.
+
 ## 0.7.2
 
 - Die Kartennavigation kann zwischen echten Home-Assistant-Tabs wechseln.
