@@ -72,6 +72,7 @@ async def async_setup(hass, config):
     websocket_api.async_register_command(hass, ws_change)
     websocket_api.async_register_command(hass, ws_nutrition_search)
     websocket_api.async_register_command(hass, ws_barcode_lookup)
+    websocket_api.async_register_command(hass, ws_product_search)
     async def sync_shopping_list(call):
         planner = hass.data.get(DOMAIN)
         if planner is None:
@@ -192,3 +193,21 @@ async def ws_barcode_lookup(hass, connection, msg):
         connection.send_error(msg['id'], 'lookup_failed', str(err))
     else:
         connection.send_result(msg['id'], product)
+
+
+@websocket_api.websocket_command({
+    vol.Required('type'): 'essensplan/product_search',
+    vol.Required('query'): str,
+})
+@websocket_api.async_response
+async def ws_product_search(hass, connection, msg):
+    planner = hass.data.get(DOMAIN)
+    if planner is None or not planner.nutrition_enabled:
+        connection.send_error(msg['id'], 'not_enabled', 'Das Nährwertmodul ist deaktiviert')
+        return
+    try:
+        products = await planner.products.search(msg['query'])
+    except (ValueError, TypeError, AttributeError) as err:
+        connection.send_error(msg['id'], 'search_failed', str(err))
+    else:
+        connection.send_result(msg['id'], products)

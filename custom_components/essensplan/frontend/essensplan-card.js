@@ -1,4 +1,4 @@
-/* Essensplan 0.14.0 – bundled with the integration; no CDN or build step. */
+/* Essensplan 0.14.1 – bundled with the integration; no CDN or build step. */
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const localDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 function offsetDay(stamp, n) { const d = new Date(`${stamp}T12:00:00`); d.setDate(d.getDate()+n); return localDate(d); }
@@ -231,6 +231,9 @@ class EssensplanCard extends HTMLElement {
       .check-line{display:flex;align-items:center;gap:10px;margin:6px 0}.check-line input{width:22px;height:22px;flex:0 0 auto;min-height:0}
       .choice{padding:6px 8px;border-radius:10px}.choice:has(input:checked){background:var(--secondary-background-color,#8882)}
       .search-line{display:flex;gap:8px;align-items:end}.search-line label{flex:1;margin:6px 0 0}
+      .product-list{display:grid;gap:6px;margin:8px 0;max-height:280px;overflow:auto}
+      .product-choice{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border-radius:12px!important;min-height:0;padding:8px 12px}
+      .product-choice small{color:var(--secondary-text-color)}.product-choice[aria-pressed=true]{border-color:var(--primary-color);border-width:2px}
       .weight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 10px}
       .weight-grid label{margin:8px 0 0;font-size:13px}
       details summary{cursor:pointer;margin:8px 0;font-weight:600}
@@ -256,7 +259,7 @@ class EssensplanCard extends HTMLElement {
       ha-card{
         color:var(--ep-text);border-radius:26px;border:1px solid var(--ep-edge);
         background:var(--ep-surface);
-        background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.0"),
+        background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.1"),
           radial-gradient(ellipse at top left,#d9a47524,transparent 68%);
         background-size:min(100%,640px) auto,100% 360px;
         background-position:top right,top left;background-repeat:no-repeat;
@@ -287,7 +290,7 @@ class EssensplanCard extends HTMLElement {
       dialog{box-shadow:0 16px 54px #0005,inset 0 1px 0 var(--ep-glint)}
       @supports (color:color-mix(in srgb,white,black)){
         ha-card{
-          background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.0"),
+          background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.1"),
             radial-gradient(ellipse at 2% 0%,color-mix(in srgb,#e6ad7d 20%,transparent),transparent 63%),
             radial-gradient(ellipse at 96% 16%,color-mix(in srgb,#9baa7f 18%,transparent),transparent 65%),
             radial-gradient(ellipse at 5% 100%,color-mix(in srgb,var(--ep-accent) 12%,transparent),transparent 66%);
@@ -581,7 +584,9 @@ class EssensplanCard extends HTMLElement {
         Zählt nicht für Nährwerte (z. B. Gewürze, Wasser)</label>
       <div data-mapping>
         <div class="search-line"><label>Lebensmittel suchen<input type="search" maxlength="200" value="${esc(entry.name)}"></label>
-          <button type="button" data-search>Suchen</button></div>
+          <button type="button" data-search>Suchen</button><button type="button" data-products>Produkte suchen</button></div>
+        <p class="hint">„Suchen“ nutzt den Bundeslebensmittelschlüssel. „Produkte suchen“ findet Supermarktprodukte bei Open Food Facts; dabei wird nur der Suchbegriff gesendet.</p>
+        <div class="product-list" hidden></div>
         <div class="choice-list" role="radiogroup" aria-label="Lebensmittel für ${esc(entry.name)}"></div>
         <p class="hint" data-result role="status"></p>
         <fieldset class="weights"><legend>Gewicht pro Einheit</legend>
@@ -642,12 +647,39 @@ class EssensplanCard extends HTMLElement {
       finally {searchButton.disabled=false;}
     };
     search.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();searchButton.click();}};
-    this.barcodeBox(panel.querySelector('[data-barcode-box]'), match=>{
+    const applyProduct=match=>{
       product=match.product;
       for (const [k] of fields) panel.querySelector(`[name=${k}]`).value=match.values[k];
       fill([...list.querySelectorAll('input')].map(i=>i.value).filter(v=>v && v!=='product' && v!=='manual')
         .map(code=>({code,name:labels.get(code)})),'product');
-    });
+    };
+    this.barcodeBox(panel.querySelector('[data-barcode-box]'), applyProduct);
+    const productList=panel.querySelector('.product-list'), productButton=panel.querySelector('[data-products]');
+    productButton.onclick=async()=>{
+      productButton.disabled=true; productList.hidden=false;
+      productList.innerHTML='<p class="hint">Produkte werden gesucht …</p>';
+      try {
+        const hits=await this._hass.callWS({type:'essensplan/product_search',query:search.value});
+        productList.innerHTML=hits.length?'<p class="hint"><strong>Produkte (Open Food Facts)</strong> · Werte pro 100 g bzw. 100 ml, bitte prüfen</p>':
+          '<p class="hint">Keine Produkte mit vollständigen Nährwerten gefunden.</p>';
+        for (const hit of hits) {
+          const button=document.createElement('button');
+          button.type='button'; button.className='product-choice';
+          button.innerHTML=`<span>${esc(hit.name)}</span><small>${esc([hit.quantity,`${hit.kcal} kcal`].filter(Boolean).join(' · '))}</small>`;
+          button.onclick=async()=>{
+            button.disabled=true;
+            try {
+              applyProduct(await this._hass.callWS({type:'essensplan/barcode_lookup',barcode:hit.barcode}));
+              for (const other of productList.querySelectorAll('.product-choice')) other.setAttribute('aria-pressed',String(other===button));
+              feedback.textContent=`${hit.name} ausgewählt.`;
+            } catch(err) {feedback.textContent=err.message || 'Produktabruf fehlgeschlagen.';}
+            finally {button.disabled=false;}
+          };
+          productList.append(button);
+        }
+      } catch(err) {productList.innerHTML=`<p class="hint">${esc(err.message || 'Produktsuche fehlgeschlagen.')}</p>`;}
+      finally {productButton.disabled=false;}
+    };
     panel.querySelector('[data-cancel]').onclick=()=>{this._barcodeStop?.();onCancel();};
     panel.querySelector('[data-apply]').onclick=()=>{
       const error=panel.querySelector('[data-panel-error]');
@@ -674,7 +706,7 @@ class EssensplanCard extends HTMLElement {
     return panel;
   }
   barcodeBox(box, onProduct) {
-    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.14.0');
+    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.14.1');
     box.innerHTML=`<p class="hint">Der Scan läuft lokal. Beim Nachschlagen wird nur der Barcode an Open Food Facts gesendet.</p>
       <div class="actions"><button type="button" data-camera>Barcode scannen</button>
         <button type="button" data-photo>Barcode-Foto</button><button type="button" data-stop hidden>Kamera schließen</button></div>
@@ -1331,7 +1363,7 @@ class EssensplanCard extends HTMLElement {
         choose.disabled=true;
         status.textContent='Screenshots werden lokal gelesen …';
         try {
-          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.14.0');
+          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.14.1');
           const result=await ocr.recognizeRecipe(selected,(page,progress)=>{
             if (active()) status.textContent=`Bild ${page} von ${selected.length} wird lokal gelesen … ${progress} %`;
           },controller.signal);

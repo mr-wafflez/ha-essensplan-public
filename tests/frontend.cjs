@@ -29,6 +29,7 @@ const assert = require('node:assert/strict');
   window.hass={states:{},callWS:async cmd=>{calls.push(cmd);
   if(cmd.type==='essensplan/barcode_lookup') return {product:{barcode:cmd.barcode,name:'Testprodukt',basis:'100g'},
    values:{kcal:'539',protein:'6.3',carbs:'57.5',fat:'30.9'}};
+  if(cmd.type==='essensplan/product_search') return [{barcode:'4056489116066',name:'Hackfleisch gemischt · Landjunker',quantity:'500 g',kcal:234}];
   if(cmd.type==='essensplan/nutrition_search') return cmd.queries.map(()=>[{code:'A1',name:'Hähnchen Brust, roh'}]);
   if(cmd.type==='essensplan/change'){
    if(cmd.revision!==state.revision)throw Error('Revisionskonflikt');
@@ -219,6 +220,13 @@ const assert = require('node:assert/strict');
  const fallbackEvent=page.waitForEvent('filechooser');
  await nutritionDialog.getByRole('button',{name:'Barcode fotografieren'}).click();
  await (await fallbackEvent).setFiles([]);
+ // Text search at Open Food Facts sends the term, then the chosen product goes through the barcode lookup.
+ await nutritionDialog.locator('[data-products]').click();
+ await nutritionDialog.locator('.product-choice').first().click();
+ await nutritionDialog.getByText('Hackfleisch gemischt · Landjunker ausgewählt.').waitFor();
+ assert(await nutritionDialog.locator('.ing-panel input[type=radio][value="product"]').isChecked());
+ assert(await page.evaluate(()=>calls.some(c=>c.type==='essensplan/product_search' && c.query==='Zwiebel') &&
+  calls.some(c=>c.type==='essensplan/barcode_lookup' && c.barcode==='4056489116066')));
  await nutritionDialog.locator('[data-close]').click();
  await nutritionDialog.waitFor({state:'detached'});
  await page.evaluate(()=>delete navigator.mediaDevices);

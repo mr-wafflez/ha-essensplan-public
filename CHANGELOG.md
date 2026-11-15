@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.14.1
+
+- **Produkte suchen**: Supermarktprodukte bei Open Food Facts per Suchbegriff finden (nur in Deutschland verkaufte Produkte mit vollständigen Nährwerten). Gesendet wird nur der Suchbegriff; die Auswahl läuft über den geprüften Barcode-Abruf.
+- „Hackfleisch“ und „gemischtes Hack“ schlagen jetzt „Rind/Schwein, Hackfleisch gemischt, roh“ vor; Rinder- und Schweinehack werden erkannt.
+- Produktwerte von Open Food Facts werden auf zwei Nachkommastellen gerundet.
+
 ## 0.14.0
 
 - Neue Zutatenliste **Zutaten & Nährwerte**: Jede Zutat wird einmal zugeordnet und gilt in allen Rezepten. Häufige Zutaten stehen oben, offene Zutaten zeigen einen Vorschlag zum Übernehmen. Alle Vorschläge lassen sich gesammelt übernehmen und prüfen.

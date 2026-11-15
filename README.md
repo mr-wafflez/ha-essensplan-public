@@ -52,6 +52,14 @@ Die Suche und Berechnung laufen lokal. Der mitgelieferte Katalog ist ein Auszug
 aus dem [Bundeslebensmittelschlüssel 4.0](https://blsdb.de/download) des
 Max Rubner-Instituts. [Quellen- und Lizenzhinweise](docs/bls-attribution.md)
 
+### Produkte aus dem Supermarkt
+
+Unter **Ändern** findet **Produkte suchen** Markenprodukte bei Open Food Facts,
+etwa „Hackfleisch gemischt“ oder „Kartoffeln festkochend“. Angezeigt werden in
+Deutschland verkaufte Produkte mit vollständigen Nährwerten. Home Assistant
+sendet dafür nur den Suchbegriff. Prüfe die Werte des gewählten Produkts, die
+Daten stammen von der Community.
+
 ### Barcode für Markenprodukte
 
 Unter **Ändern → Eigene Werte oder Barcode** kannst du bei einer Zutat einen Barcode live

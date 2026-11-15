@@ -22,7 +22,11 @@ _GRATED = ('Gouda mind. 40 % Fett i. Tr.', 'Emmentaler mind. 45 % Fett i. Tr.', 
 ALIASES = {
     'zwiebel': ('Speisezwiebel roh',), 'paprika': ('Gemüsepaprika rot, roh', 'Gemüsepaprika gelb, roh',
                                                    'Gemüsepaprika grün, roh'),
-    'knoblauch': ('Knoblauch roh',), 'hackfleisch': ('Rind Hackfleisch, roh', 'Schwein Hackfleisch, roh'),
+    'knoblauch': ('Knoblauch roh',), 'hackfleisch': ('Rind/Schwein, Hackfleisch gemischt, roh', 'Rind Hackfleisch, roh', 'Schwein Hackfleisch, roh'),
+    'hack': ('Rind/Schwein, Hackfleisch gemischt, roh', 'Rind Hackfleisch, roh', 'Schwein Hackfleisch, roh'),
+    'rinderhackfleisch': ('Rind Hackfleisch, roh',), 'rinderhack': ('Rind Hackfleisch, roh',),
+    'schweinehackfleisch': ('Schwein Hackfleisch, roh',),
+    'schweinehack': ('Schwein Hackfleisch, roh',), 'mageres hackfleisch': ('Rind Hackfleisch, roh',),
     'hahnchenbrust': ('Hähnchen Brustfilet, roh', 'Hähnchen Brust, ohne Haut, roh'),
     'hahnchenbrustfilet': ('Hähnchen Brustfilet, roh',),
     'sahne': ('Schlagsahne mind. 30 % Fett', 'Schlagsahne mind. 36 % Fett'),
@@ -94,7 +98,7 @@ def search_key(value):
 
 def word_forms(word):
     yield word
-    for ending in ('en', 'n', 's', 'e'):
+    for ending in ('en', 'es', 'n', 's', 'e'):
         if word.endswith(ending) and len(word) - len(ending) >= 3:
             yield word[:-len(ending)]
 

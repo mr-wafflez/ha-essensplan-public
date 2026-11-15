@@ -175,7 +175,9 @@ class ModelTests(unittest.TestCase):
 
     def test_suggestions_prefer_raw_basic_foods(self):
         expected = {'Zwiebel': 'Speisezwiebel roh', 'Paprika': 'Gemüsepaprika rot, roh', 'Eier': 'Hühnerei roh',
-                    'Hackfleisch': 'Rind Hackfleisch, roh', 'passierte Tomaten': 'Tomaten passiert/Tomatenpüree',
+                    'Hackfleisch': 'Rind/Schwein, Hackfleisch gemischt, roh',
+                    'gemischtes Hack': 'Rind/Schwein, Hackfleisch gemischt, roh',
+                    'Rinderhackfleisch': 'Rind Hackfleisch, roh', 'Schweinehack': 'Schwein Hackfleisch, roh', 'passierte Tomaten': 'Tomaten passiert/Tomatenpüree',
                     'rote Linsen': 'Linse rot reif', 'Cherrytomaten': 'Tomate roh', 'Schnittlauch': 'Schnittlauch roh',
                     'Ca. 400g Hähnchenbrust': 'Hähnchen Brust, ohne Haut, roh', 'Zucchini': 'Zucchini roh'}
         for query, name in expected.items():
