@@ -7,6 +7,7 @@ Eine lokale Custom Integration mit eigener Dashboard-Karte. Kein zusätzlicher S
 - Rezepte als Karten anlegen, bearbeiten, ansehen und löschen; optional mit lokalem Bild.
 - 1 bis 6 Gerichte pro Tag einstellen, jedes mit eigenen Portionen planen und wochenweise blättern.
 - Tageskachel: Alle Gerichte des Tages sehen; Tippen/Klicken öffnet das jeweilige Rezept, 600 ms gedrückt halten öffnet den Wochenplan.
+- Eine einzige Navigation oben in der Karte (Heute, Woche, Rezepte, Einkauf); Rezeptansichten haben einen Zurück-Button und führen zur Ausgangsansicht zurück.
 - Separate Dashboard-Unterseite für Zutaten und Zubereitung; alternativ innerhalb derselben Karte navigieren.
 - Zutaten automatisch zur eigenen nativen HA-To-do-Liste aggregieren und abhaken.
 - Tagesgericht als Sensor für andere Karten oder Automationen.
@@ -14,6 +15,45 @@ Eine lokale Custom Integration mit eigener Dashboard-Karte. Kein zusätzlicher S
 - Gleichzeitiges Bearbeiten wird durch Revisionen geprüft; fehlgeschlagenes Speichern veröffentlicht keine ungesicherten Änderungen.
 
 Die Integration enthält ihre Dashboard-Karte bereits. Bei einer neuen Einrichtung steht der vollständige Plan direkt als **Essensplan** in der Seitenleiste bereit. Vorhandene Essensplan-Dashboards werden weiterverwendet.
+
+## Nährwertmodul
+
+Aktiviere das Modul unter **Einstellungen → Geräte & Dienste → Essensplan →
+Konfigurieren**. Öffne dann bei einer Rezeptkarte **Nährwerte zuordnen**.
+Essensplan schlägt lokale BLS-Einträge vor und bevorzugt bestätigte Zuordnungen
+bei gleich benannten Zutaten. Prüfe bei mehrdeutigen Treffern den
+Verarbeitungszustand, etwa roh oder gekocht. Eigene Werte pro 100 g sind möglich.
+
+Die Rezeptkarte zeigt Kalorien, Protein, Kohlenhydrate und Fett pro Portion.
+In den Details stehen auch die Werte für das Gesamtgericht. Gramm und Kilogramm
+werden umgerechnet. Für Stück, Löffel oder Volumen kannst du das tatsächliche
+Gesamtgewicht in Gramm angeben. Fehlende Zuordnungen und Gewichte führen zu
+einer als unvollständig gekennzeichneten Summe.
+
+Die Suche und Berechnung laufen lokal. Der mitgelieferte Katalog ist ein Auszug
+aus dem [Bundeslebensmittelschlüssel 4.0](https://blsdb.de/download) des
+Max Rubner-Instituts. [Quellen- und Lizenzhinweise](docs/bls-attribution.md)
+
+### Barcode für Markenprodukte
+
+Unter **Nährwerte zuordnen** kannst du bei einer Zutat einen Barcode live
+scannen, ein Barcode-Foto aufnehmen oder die Nummer eingeben. Die Live-Kamera
+braucht HTTPS und eine Kameraerlaubnis. Wenn sie nicht verfügbar ist, öffnet
+**Barcode fotografieren** direkt die Fotoaufnahme oder Bildauswahl. Die
+Erkennung läuft lokal mit ZXing.
+Erst mit **Produkt nachschlagen** fragt Home Assistant Open Food Facts nach dem
+Barcode. Kamerabilder und Rezeptdaten bleiben lokal.
+
+Die Produktwerte kannst du vor dem Speichern prüfen und korrigieren.
+Essensplan unterstützt Angaben pro 100 g und pro 100 ml, ohne zwischen Masse
+und Volumen zu raten. Bestätigte Produkte werden lokal im Rezept gespeichert
+und beim erneuten Nachschlagen desselben Barcodes wiederverwendet. Bei fehlenden
+Produktdaten kannst du die BLS-Suche oder eigene Werte verwenden.
+
+[Open Food Facts](https://world.openfoodfacts.org/) stellt die Produktdaten
+unter der [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/) bereit.
+Die mitgelieferte ZXing-Bibliothek und ihre Lizenztexte liegen in
+`custom_components/essensplan/frontend/barcode/`.
 
 ## Einblicke
 
@@ -28,14 +68,20 @@ Die Abbildungen verwenden Testrezepte und Beispieldaten.
 Die Suche unter **Rezepte** findet Namen und Zutaten. Mit **★ Favorit** markierst
 du ein Rezept; **Nur Favoriten** schränkt die Ansicht ein.
 
-Beim Anlegen oder Bearbeiten kannst du **Zutaten aus Screenshot übernehmen** wählen.
-Die Texterkennung für deutsche Screenshots läuft auf dem Gerät, auf dem das
-Dashboard geöffnet ist. Neben den erkannten Zutaten siehst du den Bildausschnitt. Unsichere Zeilen sind zur Prüfung markiert. Prüfe und
-korrigiere bei Bedarf Mengen und Einheiten, bevor du sie übernimmst. Die Vorschau
-zeigt, welche Zutaten neu sind und welche bereits vorhanden sind. Du kannst
-mehrere Screenshots nacheinander ergänzen. Vorhandene Zutaten, Titel,
-Portionen und Zubereitung bleiben unverändert. Verwende einen Ausschnitt mit
-der Überschrift „Zutaten“ oder eine eng zugeschnittene Liste. Die lokale Bildvorschau wird nach dem Übernehmen, beim Verlassen des Editors oder bei einer neuen Auswahl freigegeben.
+Beim Anlegen oder Bearbeiten öffnet **Rezept aus Screenshots** den lokalen
+Import. Wähle ein bis drei Bilder und sortiere sie bei Bedarf in Lesereihenfolge.
+Bei mehreren Bildern startest du die OCR mit **Screenshots lesen**.
+
+Die Vorschau trennt Zutaten und Zubereitung und zeigt die passenden
+Bildausschnitte. Identische Zeilen an überlappenden Seitenrändern werden
+zusammengeführt. Prüfe unsichere Mengen und Fortsetzungen im bearbeitbaren Text.
+Überschriften wie „Zutaten“ und „Zubereitung“ und nummerierte Schritte helfen der
+Erkennung. Stark abweichende Layouts können eine manuelle Korrektur erfordern.
+
+Übernimm Zutaten, Zubereitung oder beides. Der Import ergänzt vorhandene Inhalte
+und speichert das Rezept erst, wenn du **Rezept speichern** wählst. Beim
+Übernehmen, Verwerfen, Verlassen des Editors oder bei einer neuen Auswahl werden
+die lokalen Bildvorschauen freigegeben.
 
 Die lokale OCR verwendet Tesseract.js 7.0.0, Tesseract.js Core 7.0.0 und
 deutsche Sprachdaten aus tessdata_fast 4.1.0. Engine, Sprachdaten und
@@ -44,10 +90,10 @@ und keine externe Verbindung zur Auswertung.
 
 Unter **Rezepte** öffnet das Buchsymbol die Rezeptdetails. Über das Kalendersymbol
 oder **Einplanen** im Detaildialog wählst du Datum, Platz und Portionen. Ist ein
-Platz belegt, muss das Ersetzen bestätigt werden. Die Einkaufsliste wird wie beim
-Speichern im Wochenplan aktualisiert.
+Platz belegt, muss das Ersetzen bestätigt werden. Die Einkaufsliste wird wie bei
+Änderungen im Wochenplan aktualisiert.
 
-Im Wochenplan öffnet **Rezept auswählen** die Suche direkt am freien Platz.
+Im Wochenplan öffnet ein Tipp auf einen freien Platz die Suche direkt dort. Auch die leere Tageskachel öffnet sie.
 Die Auswahl lässt sich auf Favoriten oder **Zuletzt gekocht** einschränken.
 Datum und Platz bleiben beim anschließenden Einplanen vorbelegt.
 
@@ -83,7 +129,7 @@ Wenn bereits ein Dashboard mit einer Essensplan-Karte vorhanden ist, wird dieses
 ### Aktualisierung von einer älteren Version
 
 1. Sichere deine HA-Konfiguration und ersetze `/config/custom_components/essensplan` durch den neuen Ordner.
-2. Prüfe die HA-Konfiguration, starte Home Assistant neu und lade das Dashboard  neu.
+2. Prüfe die HA-Konfiguration, starte Home Assistant neu und lade das Dashboard neu.
 
 Rezepte, Bilder, Wochenplan und Einkaufsstatus werden weiterverwendet. Bestehende Dashboard-Konfigurationen bleiben erhalten. Eine bisher manuell eingetragene Ressourcenadresse `/local/essensplan-card.js?...` wird bei Ressourcen im Speichermodus automatisch auf das mitgelieferte Modul umgestellt. Die alte Datei unter `www` wird danach nicht mehr benötigt und kann nach erfolgreicher Prüfung entfernt werden.
 
@@ -97,12 +143,12 @@ Bei YAML-definierten Ressourcen kannst du den bisherigen `essensplan-card.js`-Ei
 
 Unter **Einstellungen → Geräte & Dienste → Essensplan → Konfigurieren → Gerichte pro Tag** wählst du **1 bis 6**. Der Standard bleibt ein Gericht. Mit **2** kannst du zum Beispiel mittags einen Salat und abends ein Hauptgericht einplanen. Die Plätze heißen neutral „Gericht 1“, „Gericht 2“ usw.; feste Essenszeiten sind nicht vorgegeben.
 
-Jeder Platz im Wochenplan hat eine eigene Rezeptauswahl, Portionenzahl und Speichern-Schaltfläche. Freie Plätze dürfen leer bleiben. „Noch offen“ entfernt nur das gewählte Gericht. Alle geplanten Gerichte werden für die Einkaufsliste zusammengezählt, auch dasselbe Rezept an mehreren Plätzen oder Tagen. Tageskachel und Rezept-Links berücksichtigen den gewählten Platz.
+Jeder Platz im Wochenplan ist eine eigene Kachel mit Gericht, Portionen und Status. Ein Tipp auf ein Gericht öffnet ein Aktionsmenü: Rezept ansehen, Portionen und Mealprep ändern, anderes Rezept wählen, Reste einplanen, als gekocht markieren oder aus dem Plan entfernen. Das Häkchen rechts markiert ein Gericht direkt als gekocht. Freie Plätze dürfen leer bleiben. „Aus dem Plan entfernen“ entfernt nur das gewählte Gericht und fragt vorher einmal nach. Alle geplanten Gerichte werden für die Einkaufsliste zusammengezählt, auch dasselbe Rezept an mehreren Plätzen oder Tagen. Tageskachel und Rezept-Links berücksichtigen den gewählten Platz.
 
-Wenn du die Anzahl verringerst, bleiben zusätzlich belegte Plätze sichtbar, bearbeitbar und in der Einkaufsliste enthalten, bis du sie ausdrücklich leerst. Ungespeicherte Änderungen an anderen Plätzen bleiben beim Speichern erhalten. Bei einem Bearbeitungskonflikt den Plan mit **Plan neu laden und ungespeicherte Änderungen verwerfen** aktualisieren.
+Wenn du die Anzahl verringerst, bleiben zusätzlich belegte Plätze sichtbar, bearbeitbar und in der Einkaufsliste enthalten, bis du sie ausdrücklich leerst. Änderungen gelten sofort, es gibt keine ungespeicherten Entwürfe mehr. Wurde der Plan zwischenzeitlich anderswo geändert, meldet der geöffnete Dialog das; öffne ihn dann erneut.
 
-Für **Mealprep** wähle beim Einplanen oder am gespeicherten Wochenplanplatz
-**Mealprep**. Beispiel: Für Montag 2 Portionen am Platz und **Insgesamt kochen: 6**
+Für **Mealprep** wähle beim Einplanen oder tippe im Wochenplan auf das Gericht und
+wähle **Portionen und Mealprep ändern**. Beispiel: Für Montag 2 Portionen am Platz und **Insgesamt kochen: 6**
 eintragen. **Reste einplanen** zeigt die übrigen 4 Portionen. Wähle im selben
 Dialog Mittwoch und einen freien Platz, dann speichere beide Termine gemeinsam.
 Du kannst den Restetermin auch offenlassen und später über **Vorbereitet**
@@ -141,7 +187,7 @@ Ohne `detail_path` und `week_path` öffnet sich die jeweilige Ansicht direkt in 
 
 ## Fertiges Dashboard
 
-Optional: Erstelle unter **Einstellungen → Dashboards → Dashboard hinzufügen** ein leeres eigenes Dashboard, Titel „Essensplan“, URL **essensplan-plan**. Öffne dessen Rohkonfigurationseditor und setze den Inhalt von `dashboard.yaml` ein. Dadurch entstehen die Ansichten Heute, Wochenplan, Rezepte, Einkauf und die Rezept-Detailunterseite.
+Optional: Erstelle unter **Einstellungen → Dashboards → Dashboard hinzufügen** ein leeres eigenes Dashboard, Titel „Essensplan“, URL **essensplan-plan**. Öffne dessen Rohkonfigurationseditor und setze den Inhalt von `dashboard.yaml` ein. Dadurch entsteht eine Ansicht „Essensplan“, in der die Karte selbst zwischen Heute, Woche, Rezepte und Einkauf wechselt. Wochenplan, Rezepte, Einkauf und Rezept bleiben als Unterseiten erhalten, damit bestehende Verknüpfungen wie `/essensplan-plan/woche` weiter funktionieren. Unterseiten erscheinen nicht als Tabs.
 
 Das Beispiel ist eine vollständige Dashboard-Konfiguration. Nicht ungeprüft über die Rohkonfiguration deines bestehenden Haupt-Dashboards kopieren.
 
@@ -171,8 +217,9 @@ mode: week
 
 Weitere Modi: `today`, `recipes`, `detail`, `shopping`.
 
-In einem Dashboard mit mehreren Ansichten kannst du die Karten über
-`view_paths` mit den echten Home-Assistant-Tabs verbinden. Setze dieselben
+Nur wenn du ausdrücklich echte Home-Assistant-Tabs zusätzlich zur Navigation der Karte
+willst, kannst du die Karten über `view_paths` verbinden. Das ist nicht empfohlen,
+weil dann zwei Navigationen sichtbar sind. Setze dieselben
 Pfade in jeder Essensplan-Karte des Dashboards:
 
 ```yaml
@@ -192,10 +239,10 @@ ohne diese Pfade wechseln weiterhin innerhalb der Karte. Bestehende
 
 1. Öffne „Rezepte“ und drücke „+ Rezept“.
 2. Trage Name und Grundportionen ein. Zutaten, Zubereitung, Dauer und Bild kannst du sofort oder später ergänzen.
-3. Speichere das Rezept. Unter „Wochenplan“ für jeden gewünschten Platz Gericht und Portionen wählen und jeweils **Speichern** drücken. Die Anzahl der Plätze ist in den Integrationseinstellungen wählbar.
-4. Die Einkaufsliste wird bei jedem Speichern automatisch auf die bearbeitete Woche gestellt und neu berechnet. Die Listenüberschrift zeigt den Zeitraum. Wochenweise Blättern allein verändert sie nicht.
-5. „Noch offen“ auswählen und speichern entfernt nur das Gericht dieses Platzes.
-6. Tageskachel antippen: Zutaten und Zubereitung. Gedrückt halten: Wochenplan.
+3. Speichere das Rezept. Unter „Woche“ einen freien Platz antippen, ein Rezept wählen und die Portionen bestätigen. Die Anzahl der Plätze ist in den Integrationseinstellungen wählbar.
+4. Die Einkaufsliste wird bei jeder Änderung automatisch auf die bearbeitete Woche gestellt und neu berechnet. Die Listenüberschrift zeigt den Zeitraum. Wochenweise Blättern allein verändert sie nicht.
+5. Ein Gericht antippen und „Aus dem Plan entfernen“ wählen entfernt nur das Gericht dieses Platzes.
+6. Tageskachel antippen: Zutaten und Zubereitung, mit Zurück-Button. Ist heute noch nichts geplant, öffnet sie die Rezeptauswahl. Gedrückt halten: Wochenplan.
 
 ### Beispiel: Hähnchen-Kokos-Curry, Grundrezept für 4 Portionen
 
@@ -263,7 +310,7 @@ Die Karte lädt Daten über die angemeldete HA-WebSocket-Verbindung. Sensorände
 
 ## Grenzen und nächste sinnvolle Erweiterungen
 
-Noch nicht enthalten: benannte Frühstück-/Mittag-/Abendplätze, Drag & Drop, Import von Rezept-Webseiten, Vorratsverwaltung, automatische Synonym-Erkennung, Tags, Nährwertberechnung und individuelle Nutzerrechte. Mengen im freien Zubereitungstext werden beim Skalieren nicht umgeschrieben.
+Noch nicht enthalten: benannte Frühstück-/Mittag-/Abendplätze, Drag & Drop, Import von Rezept-Webseiten, Vorratsverwaltung, automatische Synonym-Erkennung, Tags und individuelle Nutzerrechte. Mengen im freien Zubereitungstext werden beim Skalieren nicht umgeschrieben.
 
 Das Layout reagiert auf schmale Displays. Ein vollständiger Wochenplan oder langes Rezept kann scrollen; die Tageskachel ist die kompakte Variante für dein Tablet-Dashboard. 
 

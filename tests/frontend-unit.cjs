@@ -31,9 +31,12 @@ test('recipe content is escaped and ingredients scale to planned portions',()=>{
  const {card,root,tile}=makeCard();assert(root.innerHTML.includes('Curry &lt;b&gt; &amp; &quot;'));
  tile.onclick();assert(root.innerHTML.includes('250 g Hähnchen'));assert(!root.innerHTML.includes('<script>'));
 });
-test('empty day opens weekly planner',()=>{
- const {card,root}=makeCard();card.data.plan={};card.render();root.querySelector('#today').onclick();
- assert.equal(card._mode,'week');assert(root.innerHTML.includes('Unser Wochenplan'));
+test('empty day opens recipe picker, or recipes when none exist',()=>{
+ const {card,root}=makeCard();card.data.plan={};card.render();
+ let picked=null;card.openRecipePicker=(date,slot)=>{picked=[date,slot];};
+ root.querySelector('#today').onclick();assert.deepEqual(picked,['2026-10-15',0]);
+ card.data.recipes={};card.render();root.querySelector('#today').onclick();
+ assert.equal(card._mode,'recipes');
 });
 test('long press opens week and a following click does not open recipe',async()=>{
  const {card,tile}=makeCard();tile.onpointerdown({button:0,clientX:0,clientY:0});
@@ -46,7 +49,7 @@ test('scroll movement cancels long press and click navigation',async()=>{
 });
 test('configured navigation uses local URL, date query and HA event',()=>{
  const {tile,location,events}=makeCard({mode:'today',detail_path:'/essensplan/rezept',week_path:'/essensplan/woche'});
- tile.onclick();assert.equal(location.url,'/essensplan/rezept?meal_date=2026-10-15');assert(events.includes('location-changed'));
+ tile.onclick();assert.equal(location.url,'/essensplan/rezept?meal_date=2026-10-15&from=today');assert(events.includes('location-changed'));
 });
 test('dashboard tabs use their own paths without changing the current card mode',()=>{
  const {card,location,events,root}=makeCard({mode:'week',view_paths:{

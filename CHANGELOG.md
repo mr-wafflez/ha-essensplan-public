@@ -1,5 +1,38 @@
 # Änderungen
 
+## 0.13.0
+
+- Eine einzige Navigation oben in der Karte (Heute, Woche, Rezepte, Einkauf) auf allen Ansichten, auch auf der Tageskachel. Die doppelten Schaltflächen unter der Tageskachel entfallen.
+- Rezeptdetails haben einen Zurück-Button und führen zur Ausgangsansicht zurück. Die Herkunft steht als `from` in der Adresse und bleibt dadurch bei Dashboard-Pfaden erhalten.
+- Wochenplan als Tageskacheln statt Formularen: Gericht, Portionen und Status auf einen Blick, Häkchen für „gekocht“ direkt an der Kachel.
+- Ein Tipp auf ein Gericht öffnet ein Aktionsmenü (ansehen, Portionen und Mealprep ändern, anderes Rezept, Reste, gekocht, entfernen). Ein Tipp auf einen freien Platz öffnet die Rezeptwahl. Alle Änderungen gelten sofort, ungespeicherte Entwürfe entfallen. Entfernen fragt einmal nach.
+- Eine leere Tageskachel öffnet direkt die Rezeptwahl für heute.
+- `dashboard.yaml` enthält nur noch eine sichtbare Ansicht. Die übrigen Pfade bleiben als Unterseiten für bestehende Verknüpfungen.
+
+## 0.12.1
+
+- Kamera direkt beim Antippen anfordern und bei fehlender Live-Kamera auf Fotoaufnahme wechseln.
+
+## 0.12.0
+
+- Barcode-Scan per Kamera oder Foto direkt in der Nährwertzuordnung.
+- Markenprodukte über Open Food Facts abrufen, lokal speichern und erneut verwenden.
+
+## 0.11.0
+
+- Lokale BLS-Vorschläge für Rezeptzutaten und manuelle Nährwerte.
+- Kalorien und Makros pro Gericht und Portion mit Kennzeichnung fehlender Werte.
+
+## 0.10.0
+
+- Grundlage für das optionale Nährwertmodul im Home-Assistant-Optionsdialog.
+
+## 0.9.0
+
+- Lokaler Rezeptimport aus bis zu drei sortierbaren Screenshots.
+- Getrennte Korrekturansichten für Zutaten und Zubereitung mit Bildausschnitten.
+- Fortsetzungen und identische Überlappungen zusammenführen. Zutaten und Schritte separat oder gemeinsam ergänzen.
+
 ## 0.8.0
 
 - Rezeptwahl direkt in freien Wochenplanplätzen mit Suche, Favoriten und Kochverlauf.
