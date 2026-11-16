@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.14.2
+
+- Mengen & Nährwerte: Vollständige Zutaten färben nur noch den Status grün, nicht mehr die ganze Zeile.
+- Neue Abbildungen in der README für Wochenplan, Rezeptwahl, Aktionsmenü, Zutatenliste, Mengen-Tabelle und Screenshot-Import; `tools/readme_screenshots.py` erzeugt sie reproduzierbar aus Testrezepten.
+
 ## 0.14.1
 
 - **Produkte suchen**: Supermarktprodukte bei Open Food Facts per Suchbegriff finden (nur in Deutschland verkaufte Produkte mit vollständigen Nährwerten). Gesendet wird nur der Suchbegriff; die Auswahl läuft über den geprüften Barcode-Abruf.
