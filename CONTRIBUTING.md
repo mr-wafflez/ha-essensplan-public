@@ -16,3 +16,7 @@ node --check custom_components/essensplan/frontend/essensplan-card.js
 Für den Browser-Test Playwright und Chromium installieren, dann
 `node tests/frontend.cjs` ausführen. Der Test simuliert die
 HA-Schnittstelle; er braucht keine produktive Instanz oder Zugangsdaten.
+
+Ändert sich eine Funktion, die Bedienung oder die Installation, gehören
+`README.md` und `CHANGELOG.md` in denselben Pull Request, damit die
+Beschreibung immer dem aktuellen Stand entspricht.
