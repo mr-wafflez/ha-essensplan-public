@@ -13,6 +13,9 @@ Eine lokale Custom Integration mit eigener Dashboard-Karte. Kein zusätzlicher S
 - Tagesgericht als Sensor für andere Karten oder Automationen.
 - Lokale Speicherung in Home Assistant, einschließlich Häkchen und Plan; Aktualisierung um lokale Mitternacht.
 - Gleichzeitiges Bearbeiten wird durch Revisionen geprüft; fehlgeschlagenes Speichern veröffentlicht keine ungesicherten Änderungen.
+- Mealprep: einmal kochen, Reste an anderen Tagen einplanen, Gerichte als gekocht abhaken.
+- Rezepte aus bis zu drei Screenshots importieren; die Texterkennung läuft lokal.
+- Optionales Nährwertmodul: Kalorien und Makros pro Portion, Zuordnung einmal pro Zutat für alle Rezepte, Vorschläge aus dem Bundeslebensmittelschlüssel, Supermarktprodukte per Suche oder Barcode.
 
 Die Integration enthält ihre Dashboard-Karte bereits. Bei einer neuen Einrichtung steht der vollständige Plan direkt als **Essensplan** in der Seitenleiste bereit. Vorhandene Essensplan-Dashboards werden weiterverwendet.
 
@@ -143,10 +146,14 @@ im [Changelog](CHANGELOG.md).
 
 ## Installation
 
-1. Entpacke `essensplan-0.7.2.zip` und kopiere **nur den Ordner `custom_components/essensplan`** nach `/config/custom_components/essensplan` in Home Assistant.
-2. Starte Home Assistant neu.
+**Über den Marketplace (HACS)** – empfohlen, weil Updates dann automatisch angeboten werden:
+
+1. Füge im **Marketplace** (bzw. HACS) `https://github.com/mr-wafflez/ha-essensplan-public` als benutzerdefiniertes Repository mit der Kategorie **Integration** hinzu.
+2. Installiere **Essensplan** und starte Home Assistant neu.
 3. Öffne **Einstellungen → Geräte & Dienste → Integration hinzufügen → Essensplan** und bestätige die Einrichtung.
 4. Öffne **Essensplan** in der Seitenleiste und lege dein erstes Rezept an.
+
+**Manuell:** Lade unter [Releases](https://github.com/mr-wafflez/ha-essensplan-public/releases) das aktuelle `essensplan-<Version>.zip`, entpacke es und kopiere **nur den Ordner `custom_components/essensplan`** nach `/config/custom_components/essensplan`. Danach wie oben ab Schritt 2 weiter.
 
 Die Karte wird automatisch geladen. Separate Dateien unter `www`, manuelle Dashboard-Ressourcen und das Kopieren einer Dashboard-Konfiguration sind für die erste Einrichtung nicht nötig. Die Integration ist einmal pro HA-Installation vorgesehen. `/config` bezeichnet den Konfigurationsordner der laufenden HA-Instanz.
 
@@ -154,7 +161,7 @@ Wenn bereits ein Dashboard mit einer Essensplan-Karte vorhanden ist, wird dieses
 
 ### Aktualisierung von einer älteren Version
 
-1. Sichere deine HA-Konfiguration und ersetze `/config/custom_components/essensplan` durch den neuen Ordner.
+1. Sichere deine HA-Konfiguration. Installiere das angebotene Update im Marketplace oder ersetze bei manueller Installation `/config/custom_components/essensplan` durch den neuen Ordner.
 2. Prüfe die HA-Konfiguration, starte Home Assistant neu und lade das Dashboard neu.
 
 Rezepte, Bilder, Wochenplan und Einkaufsstatus werden weiterverwendet. Bestehende Dashboard-Konfigurationen bleiben erhalten. Eine bisher manuell eingetragene Ressourcenadresse `/local/essensplan-card.js?...` wird bei Ressourcen im Speichermodus automatisch auf das mitgelieferte Modul umgestellt. Die alte Datei unter `www` wird danach nicht mehr benötigt und kann nach erfolgreicher Prüfung entfernt werden.
@@ -209,7 +216,7 @@ week_path: /essensplan-plan/woche
 
 Dazu das unten beschriebene eigene Dashboard mit URL `essensplan-plan` erstellen. Wenn du andere Dashboard-/View-Pfade verwendest, die beiden Pfade anpassen. Die ausgewählte Mahlzeit wird als `meal_date=YYYY-MM-DD` und ab dem zweiten Platz zusätzlich mit `meal_slot=1` usw. in der lokalen URL mitgegeben (Zählung ab 0).
 
-Ohne `detail_path` und `week_path` öffnet sich die jeweilige Ansicht direkt in derselben Karte. Die sichtbaren Schaltflächen erlauben die Bedienung auch ohne langes Drücken. Ein eigener Essensplan-Editor im visuellen Karteneditor ist noch nicht enthalten; die Kartenkonfiguration erfolgt per YAML.
+Ohne `detail_path` und `week_path` öffnet sich die jeweilige Ansicht direkt in derselben Karte. Die Navigation oben in der Karte erlaubt die Bedienung auch ohne langes Drücken. Ein eigener Essensplan-Editor im visuellen Karteneditor ist noch nicht enthalten; die Kartenkonfiguration erfolgt per YAML.
 
 ## Fertiges Dashboard
 
@@ -289,7 +296,7 @@ Currypaste und Paprika kurz mitbraten, dann Kokosmilch zugeben.
 Sanft köcheln lassen, bis das Hähnchen durchgegart und die Paprika nach Wunsch weich ist. Frühlingszwiebeln zugeben und abschmecken.
 ```
 
-Menge und Einheit werden für die Einkaufsliste verwendet. Dezimalzeichen: Komma oder Punkt. Erlaubte Einheiten: `g`, `kg`, `ml`, `l`, `Stück` (auch `stk`), `EL`, `TL`, `Prise`, `Bund`, `Dose` oder leer. Bei leerer Einheit trotzdem beide Semikolons verwenden, z. B. `1 ; ; Salz nach Bedarf`.
+Im Rezepteditor hat jede Zutat eine eigene Zeile mit Name, Menge und Einheit. Menge und Einheit werden für die Einkaufsliste verwendet. Dezimalzeichen: Komma oder Punkt. Erlaubte Einheiten: `g`, `kg`, `ml`, `l`, `Stück`, `EL`, `TL`, `Prise`, `Bund`, `Dose` oder leer. Mengen lassen sich auch später gesammelt unter **Mengen & Nährwerte** nachtragen.
 
 Ist die Menge unbekannt, gib nur den Zutatennamen ein und lasse Menge und Einheit leer.
 Das Rezept zeigt dann nur den Zutatennamen. Beim Einplanen erscheint
@@ -304,7 +311,7 @@ Wie andere native HA-Bilder ist ein hochgeladenes Rezeptbild über seine zufäll
 ## Regeln der Einkaufsliste
 
 - Namen werden ohne Groß-/Kleinschreibung und mit Unicode-Normalisierung verglichen. „Paprika“ und „paprika“ passen zusammen, „rote Paprika“ und „Paprika“ bleiben getrennt.
-- `kg` und `g` werden zu Gramm, `l` und `ml` zu Millilitern umgerechnet. EL, TL, Stück, Bund usw. bleiben getrennt. Keine Schätzung von Stückgewicht oder Dosenfüllmenge.
+- `kg` und `g` werden zu Gramm, `l` und `ml` zu Millilitern umgerechnet. EL, TL, Stück, Bund usw. bleiben getrennt. Die Gewichte pro Einheit aus dem Nährwertmodul werden für die Einkaufsliste nicht verwendet; sie schätzt keine Stückgewichte oder Dosenfüllmengen.
 - Mengen werden anhand von geplanten Portionen / Grundportionen skaliert und mit maximal drei Nachkommastellen angezeigt.
 - Zutaten ohne Mengenangabe erscheinen pro Zutat und Einkaufswoche einmal als „Menge offen“. Sie bleiben von bezifferten Mengen derselben Zutat getrennt.
 - Über **Menge ergänzen** kannst du im Essensplan die offene Menge für diese Einkaufswoche eintragen. Das Rezept bleibt unverändert. Eine leere Menge setzt den Eintrag zurück.
