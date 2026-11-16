@@ -367,4 +367,4 @@ Essensplan steht unter [Apache 2.0](LICENSE). Hinweise zu mitgelieferter Softwar
 
 ## Automatisierter Paketbau
 
-GitHub Actions führt auf Pull Requests, auf `main` und bei `v*`-Tags die Tests aus und hinterlegt das ZIP als Workflow-Artefakt. Bei Tags prüft der Build die Übereinstimmung mit der Manifestversion.
+GitHub Actions führt auf Pull Requests, auf `main` und bei `v*`-Tags die Tests aus und hinterlegt das ZIP als Workflow-Artefakt. Bei Tags prüft der Build die Übereinstimmung mit der Manifestversion. Nach einem erfolgreichen Lauf auf `main` legt der Workflow Tag und Release `v<Version>` mit dem ZIP und den Notizen aus dem Changelog an, sofern es für die Version aus `manifest.json` noch kein Release gibt. Ein Merge mit neuer Version erzeugt so automatisch das Release, das der Marketplace als Update anbietet.

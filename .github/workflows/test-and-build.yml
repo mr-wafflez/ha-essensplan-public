@@ -38,3 +38,49 @@ jobs:
           name: essensplan-installationspaket
           path: dist/essensplan-*.zip
           if-no-files-found: error
+
+  # After a merge to main: create tag and release for the manifest version once.
+  # The Marketplace (HACS) offers the newest release as the update, so a missing
+  # release would roll installations back to the previous version.
+  release:
+    needs: verify-and-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Version und Release-Notizen lesen
+        id: version
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          version = json.loads(Path('custom_components/essensplan/manifest.json').read_text())['version']
+          match = re.search(rf'^## {re.escape(version)}\n(.*?)(?=^## |\Z)', Path('CHANGELOG.md').read_text(), re.S | re.M)
+          notes = match.group(1).strip() if match else f'Essensplan {version}'
+          Path('release-notes.md').write_text(notes + '\n')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f'version={version}\n')
+          PY
+      - name: Release anlegen, falls es noch keines gibt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v$VERSION existiert bereits."
+            exit 0
+          fi
+          python tools/build_release.py
+          gh release create "v$VERSION" dist/essensplan-*.zip --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "Essensplan $VERSION" --notes-file release-notes.md
