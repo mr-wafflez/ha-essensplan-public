@@ -7,7 +7,7 @@ import re
 import unicodedata
 from uuid import uuid4
 
-from .nutrition import validate_assignment
+from .nutrition import key as ingredient_key, validate_assignment, validate_ingredient
 
 UNITS = {'g': ('g', 1), 'kg': ('g', 1000), 'ml': ('ml', 1), 'l': ('ml', 1000),
          'stück': ('Stück', 1), 'stk': ('Stück', 1), 'el': ('EL', 1), 'tl': ('TL', 1),
@@ -75,7 +75,7 @@ def validate_recipe(raw, recipe_id=None):
 
 
 def initial_state():
-    return {'recipes': {}, 'plan': {}, 'completed': [], 'shopping_week': '', 'revision': 0}
+    return {'recipes': {}, 'plan': {}, 'completed': [], 'shopping_week': '', 'revision': 0, 'ingredients': {}}
 
 
 def meals_for(state, stamp):
@@ -88,7 +88,40 @@ def normalize_state(state):
     """Upgrade on a copy; persist with the next successful transaction."""
     result = deepcopy(state)
     result['plan'] = {stamp: deepcopy(meals_for(state, stamp)) for stamp in state['plan']}
+    result.setdefault('ingredients', {})
     return result
+
+
+def set_ingredients(state, items):
+    """Store household-wide nutrition and unit weights per ingredient name."""
+    if not isinstance(items, list) or len(items) > 500:
+        raise ValueError('Höchstens 500 Zutaten pro Speichervorgang')
+    for raw in items:
+        entry = validate_ingredient(raw)
+        name_key = ingredient_key(raw['name'])
+        if entry:
+            state['ingredients'][name_key] = entry
+        else:
+            state['ingredients'].pop(name_key, None)
+
+
+def keep_assignments(previous, ingredients):
+    """Carry recipe-specific nutrition over to edited ingredient rows."""
+    previous = list(previous)
+    for item in ingredients:
+        matched = next((old for old in previous if all(
+            old[k] == item[k] for k in ('name', 'quantity', 'unit'))), None)
+        if matched is None:
+            same_name = [old for old in previous if old['name'] == item['name']]
+            matched = same_name[0] if len(same_name) == 1 else None
+        if matched is None:
+            continue
+        previous.remove(matched)
+        if assignment := matched.get('nutrition'):
+            assignment = dict(assignment)
+            if any(matched[k] != item[k] for k in ('quantity', 'unit')):
+                assignment.pop('grams', None)
+            item['nutrition'] = assignment
 
 
 def validate_prepared_meals(plan):
@@ -170,21 +203,7 @@ def mutate(state, operation, payload, today, meals_per_day=1):
         if rid is not None and rid not in result['recipes']:
             raise ValueError('Rezept existiert nicht mehr')
         recipe = validate_recipe(payload, rid)
-        previous = list(result['recipes'].get(rid, {}).get('ingredients', []))
-        for item in recipe['ingredients']:
-            matched = next((old for old in previous if all(
-                old[k] == item[k] for k in ('name', 'quantity', 'unit'))), None)
-            if matched is None:
-                same_name = [old for old in previous if old['name'] == item['name']]
-                matched = same_name[0] if len(same_name) == 1 else None
-            if matched is None:
-                continue
-            previous.remove(matched)
-            if assignment := matched.get('nutrition'):
-                assignment = dict(assignment)
-                if any(matched[k] != item[k] for k in ('quantity', 'unit')):
-                    assignment.pop('grams', None)
-                item['nutrition'] = assignment
+        keep_assignments(result['recipes'].get(rid, {}).get('ingredients', []), recipe['ingredients'])
         minutes = payload.get('minutes', result['recipes'].get(rid, {}).get('minutes'))
         if minutes is not None:
             if type(minutes) is not int or not 1 <= minutes <= 1440:
@@ -204,6 +223,22 @@ def mutate(state, operation, payload, today, meals_per_day=1):
                 item['nutrition'] = assignment
             else:
                 item.pop('nutrition', None)
+    elif operation == 'set_ingredients':
+        set_ingredients(result, payload['items'])
+    elif operation == 'save_amounts':
+        recipe = result['recipes'].get(payload['id'])
+        items = payload['items']
+        if not recipe or not isinstance(items, list) or len(items) != len(recipe['ingredients']):
+            raise ValueError('Die Zutatenliste hat sich geändert. Bitte neu laden.')
+        checked = validate_recipe({**recipe, 'ingredients': [
+            {'name': old['name'], 'quantity': new.get('quantity'), 'unit': new.get('unit', '')}
+            for old, new in zip(recipe['ingredients'], items)]}, recipe['id'])['ingredients']
+        keep_assignments(recipe['ingredients'], checked)
+        for item, new in zip(checked, items):
+            if new.get('use_list') is True:
+                item.pop('nutrition', None)
+        recipe['ingredients'] = checked
+        set_ingredients(result, payload.get('ingredients', []))
     elif operation == 'favorite':
         recipe = result['recipes'].get(payload['id'])
         if not recipe or type(payload.get('favorite')) is not bool:
