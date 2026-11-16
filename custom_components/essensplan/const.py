@@ -1,6 +1,6 @@
 DOMAIN = 'essensplan'
 PLATFORMS = ['sensor', 'todo']
-VERSION = '0.14.1'
+VERSION = '0.14.2'
 CONF_NUTRITION_ENABLED = 'nutrition_enabled'
 CONF_MEALS_PER_DAY = 'meals_per_day'
 DEFAULT_MEALS_PER_DAY = 1

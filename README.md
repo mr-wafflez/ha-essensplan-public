@@ -86,11 +86,15 @@ Die mitgelieferte ZXing-Bibliothek und ihre Lizenztexte liegen in
 
 ## Einblicke
 
-![Rezeptwahl aus einem freien Wochenplanplatz](docs/images/rezeptwahl.png)
-![Mealprep am Kochplatz](docs/images/mealprep.png)
-![Lokale Screenshot-Prüfung](docs/images/screenshot-pruefung.png)
+![Wochenplan mit Tageskacheln, Mealprep und gekochten Gerichten](docs/images/wochenplan.png)
+![Rezeptwahl aus einem freien Platz im Wochenplan](docs/images/rezeptwahl.png)
+![Aktionsmenü eines Gerichts mit Mealprep und Resten](docs/images/mealprep.png)
+![Zutaten & Nährwerte: jede Zutat einmal zuordnen](docs/images/zutaten-naehrwerte.png)
+![Mengen & Nährwerte eines Rezepts mit Status je Zutat](docs/images/mengen-naehrwerte.png)
+![Lokaler Rezeptimport aus einem Screenshot mit Prüfhinweis](docs/images/screenshot-pruefung.png)
 
-Die Abbildungen verwenden Testrezepte und Beispieldaten.
+Die Abbildungen verwenden erfundene Testrezepte. `python tools/readme_screenshots.py`
+erzeugt sie mit dem aktuellen Stand neu (benötigt Node.js und Playwright mit Chromium).
 
 ## Rezeptkarten
 

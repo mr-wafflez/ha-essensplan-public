@@ -4,7 +4,7 @@ let library;
 function loadReader() {
   if (!library) library=new Promise((resolve,reject)=>{
     const script=document.createElement('script');
-    script.src=assets+'/zxing-browser.min.js?v=0.14.1';
+    script.src=assets+'/zxing-browser.min.js?v=0.14.2';
     script.onload=()=>globalThis.ZXingBrowser ? resolve(globalThis.ZXingBrowser) : reject(new Error('Barcode-Scanner konnte nicht geladen werden.'));
     script.onerror=()=>reject(new Error('Barcode-Scanner konnte nicht geladen werden.'));
     document.head.append(script);

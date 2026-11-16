@@ -1,4 +1,4 @@
-/* Essensplan 0.14.1 – bundled with the integration; no CDN or build step. */
+/* Essensplan 0.14.2 – bundled with the integration; no CDN or build step. */
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const localDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 function offsetDay(stamp, n) { const d = new Date(`${stamp}T12:00:00`); d.setDate(d.getDate()+n); return localDate(d); }
@@ -259,7 +259,7 @@ class EssensplanCard extends HTMLElement {
       ha-card{
         color:var(--ep-text);border-radius:26px;border:1px solid var(--ep-edge);
         background:var(--ep-surface);
-        background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.1"),
+        background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.2"),
           radial-gradient(ellipse at top left,#d9a47524,transparent 68%);
         background-size:min(100%,640px) auto,100% 360px;
         background-position:top right,top left;background-repeat:no-repeat;
@@ -290,7 +290,7 @@ class EssensplanCard extends HTMLElement {
       dialog{box-shadow:0 16px 54px #0005,inset 0 1px 0 var(--ep-glint)}
       @supports (color:color-mix(in srgb,white,black)){
         ha-card{
-          background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.1"),
+          background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.2"),
             radial-gradient(ellipse at 2% 0%,color-mix(in srgb,#e6ad7d 20%,transparent),transparent 63%),
             radial-gradient(ellipse at 96% 16%,color-mix(in srgb,#9baa7f 18%,transparent),transparent 65%),
             radial-gradient(ellipse at 5% 100%,color-mix(in srgb,var(--ep-accent) 12%,transparent),transparent 66%);
@@ -706,7 +706,7 @@ class EssensplanCard extends HTMLElement {
     return panel;
   }
   barcodeBox(box, onProduct) {
-    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.14.1');
+    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.14.2');
     box.innerHTML=`<p class="hint">Der Scan läuft lokal. Beim Nachschlagen wird nur der Barcode an Open Food Facts gesendet.</p>
       <div class="actions"><button type="button" data-camera>Barcode scannen</button>
         <button type="button" data-photo>Barcode-Foto</button><button type="button" data-stop hidden>Kamera schließen</button></div>
@@ -932,7 +932,7 @@ class EssensplanCard extends HTMLElement {
         if (info.status==='ok') complete++;
         if (info.status==='ignored') ignored++;
         const row=document.createElement('div');
-        row.className=`amount-row ${info.status}`;
+        row.className=`amount-row status-${info.status}`;
         row.innerHTML=`<input aria-label="Menge ${esc(item.name)}" data-qty inputmode="decimal" value="${esc(item.quantity==null?'':String(item.quantity).replace('.',','))}" placeholder="Menge">
           <select aria-label="Einheit ${esc(item.name)}" data-unit>${units.map(u=>`<option value="${u}"${(item.unit||'')===u?' selected':''}>${this.unitLabel(u)}</option>`).join('')}</select>
           <div class="amount-name"><strong>${esc(item.name)}</strong><div class="amount-state">${describe(item,view,info)}</div></div>
@@ -968,7 +968,7 @@ class EssensplanCard extends HTMLElement {
     const refresh=(row,index)=>{
       const item=items[index], entry=this.ingredientEntry(item.name), view=this.ingredientView(entry, staged);
       const info=this.amountStatus(item, view, item.useList);
-      row.className=`amount-row ${info.status}`;
+      row.className=`amount-row status-${info.status}`;
       row.querySelector('[data-unit]').value=item.unit||'';
       row.querySelector('.amount-state').innerHTML=describe(item,view,info);
       row.querySelector('[data-edit]').textContent=info.status==='weight'?'Gewicht':'Zuordnen';
@@ -1363,7 +1363,7 @@ class EssensplanCard extends HTMLElement {
         choose.disabled=true;
         status.textContent='Screenshots werden lokal gelesen …';
         try {
-          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.14.1');
+          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.14.2');
           const result=await ocr.recognizeRecipe(selected,(page,progress)=>{
             if (active()) status.textContent=`Bild ${page} von ${selected.length} wird lokal gelesen … ${progress} %`;
           },controller.signal);
