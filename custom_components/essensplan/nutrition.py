@@ -173,7 +173,8 @@ def candidates(query, recipes, ingredients=None):
         found = _ranked(fallback, fallback[0])
     ordered += found
     unique = list(dict.fromkeys(ordered))
-    return [{'code': code, 'name': catalog()[code][0]} for code in unique[:12]]
+    return [{'code': code, 'name': catalog()[code][0], 'kcal': round(float(catalog()[code][1][0]))}
+            for code in unique[:12]]
 
 
 def decimal_value(value, minimum, maximum):

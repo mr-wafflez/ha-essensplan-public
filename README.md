@@ -15,7 +15,7 @@ Eine lokale Custom Integration mit eigener Dashboard-Karte. Kein zusätzlicher S
 - Gleichzeitiges Bearbeiten wird durch Revisionen geprüft; fehlgeschlagenes Speichern veröffentlicht keine ungesicherten Änderungen.
 - Mealprep: einmal kochen, Reste an anderen Tagen einplanen, Gerichte als gekocht abhaken.
 - Rezepte aus bis zu drei Screenshots importieren; die Texterkennung läuft lokal.
-- Optionales Nährwertmodul: Kalorien und Makros pro Portion, Zuordnung einmal pro Zutat für alle Rezepte, Vorschläge aus dem Bundeslebensmittelschlüssel, Supermarktprodukte per Suche oder Barcode.
+- Optionales Nährwertmodul: Kalorien und Makros pro Portion, Zuordnung einmal pro Zutat für alle Rezepte, eine Suche für Lebensmittel (Bundeslebensmittelschlüssel) und Supermarktprodukte, Barcode-Scan.
 
 Die Integration enthält ihre Dashboard-Karte bereits. Bei einer neuen Einrichtung steht der vollständige Plan direkt als **Essensplan** in der Seitenleiste bereit. Vorhandene Essensplan-Dashboards werden weiterverwendet.
 
@@ -28,9 +28,8 @@ Konfigurieren**. Danach gibt es zwei Stellen:
   die häufigsten zuerst. Essensplan schlägt den passenden Eintrag aus dem
   Bundeslebensmittelschlüssel vor, bevorzugt rohe Grundzutaten. Mit
   **Übernehmen** gilt die Zuordnung für alle Rezepte mit dieser Zutat. Mit
-  **Ändern** wählst du einen anderen Treffer, etwa gekocht statt roh, oder
-  markierst die Zutat als **zählt nicht**. Gewürze, Salz und Wasser sind von
-  Anfang an so markiert.
+  **Ändern** suchst du selbst, scannst einen Barcode oder markierst die Zutat
+  als **zählt nicht**. Gewürze, Salz und Wasser sind von Anfang an so markiert.
 - **Mengen & Nährwerte** (an jeder Rezeptkarte und in den Rezeptdetails): eine
   kompakte Tabelle mit Menge und Einheit pro Zutat. Daneben steht, was noch fehlt:
   Menge, Zuordnung oder Gewicht. Ein Speichern übernimmt Mengen und neue
@@ -55,29 +54,27 @@ Die Suche und Berechnung laufen lokal. Der mitgelieferte Katalog ist ein Auszug
 aus dem [Bundeslebensmittelschlüssel 4.0](https://blsdb.de/download) des
 Max Rubner-Instituts. [Quellen- und Lizenzhinweise](docs/bls-attribution.md)
 
-### Produkte aus dem Supermarkt
+### Suchen und Scannen
 
-Unter **Ändern** findet **Produkte suchen** Markenprodukte bei Open Food Facts,
-etwa „Hackfleisch gemischt“ oder „Kartoffeln festkochend“. Angezeigt werden in
-Deutschland verkaufte Produkte mit vollständigen Nährwerten. Home Assistant
-sendet dafür nur den Suchbegriff. Prüfe die Werte des gewählten Produkts, die
-Daten stammen von der Community.
+Unter **Ändern** gibt es ein Suchfeld mit **Suchen** und daneben **Scannen**:
 
-### Barcode für Markenprodukte
+- **Suchen** zeigt in einer Liste zuerst passende **Lebensmittel** aus dem
+  Bundeslebensmittelschlüssel und darunter **Produkte** aus dem Supermarkt von
+  Open Food Facts, jeweils mit kcal pro 100 g. Produkte sind auf in Deutschland
+  verkaufte Artikel mit vollständigen Nährwerten beschränkt. Home Assistant
+  sendet dafür nur den Suchbegriff.
+- **Scannen** öffnet die Kamera. Sobald der Barcode erkannt ist, schlägt
+  Essensplan das Produkt nach und wählt es aus. Die Erkennung läuft lokal mit
+  ZXing; an Open Food Facts geht nur die Barcode-Nummer. Die Live-Kamera braucht
+  HTTPS und eine Kameraerlaubnis. Ohne Live-Kamera öffnet **Scannen** die
+  Fotoaufnahme bzw. Bildauswahl.
+- Unter **Weitere Optionen** kannst du eine Barcode-Nummer von Hand eingeben
+  oder eigene Werte pro 100 g eintragen.
 
-Unter **Ändern → Eigene Werte oder Barcode** kannst du bei einer Zutat einen Barcode live
-scannen, ein Barcode-Foto aufnehmen oder die Nummer eingeben. Die Live-Kamera
-braucht HTTPS und eine Kameraerlaubnis. Wenn sie nicht verfügbar ist, öffnet
-**Barcode fotografieren** direkt die Fotoaufnahme oder Bildauswahl. Die
-Erkennung läuft lokal mit ZXing.
-Erst mit **Produkt nachschlagen** fragt Home Assistant Open Food Facts nach dem
-Barcode. Kamerabilder und Rezeptdaten bleiben lokal.
-
-Die Produktwerte kannst du vor dem Speichern prüfen und korrigieren.
-Essensplan unterstützt Angaben pro 100 g und pro 100 ml, ohne zwischen Masse
-und Volumen zu raten. Bestätigte Produkte werden lokal im Rezept gespeichert
-und beim erneuten Nachschlagen desselben Barcodes wiederverwendet. Bei fehlenden
-Produktdaten kannst du die BLS-Suche oder eigene Werte verwenden.
+Prüfe die Werte eines Produkts, die Daten stammen von der Community. Essensplan
+unterstützt Angaben pro 100 g und pro 100 ml. Bestätigte Produkte werden lokal
+gespeichert und beim erneuten Scannen desselben Barcodes ohne Abruf
+wiederverwendet.
 
 [Open Food Facts](https://world.openfoodfacts.org/) stellt die Produktdaten
 unter der [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/) bereit.
@@ -90,6 +87,7 @@ Die mitgelieferte ZXing-Bibliothek und ihre Lizenztexte liegen in
 ![Rezeptwahl aus einem freien Platz im Wochenplan](docs/images/rezeptwahl.png)
 ![Aktionsmenü eines Gerichts mit Mealprep und Resten](docs/images/mealprep.png)
 ![Zutaten & Nährwerte: jede Zutat einmal zuordnen](docs/images/zutaten-naehrwerte.png)
+![Eine Suche für Lebensmittel und Produkte, daneben Scannen](docs/images/suche.png)
 ![Mengen & Nährwerte eines Rezepts mit Status je Zutat](docs/images/mengen-naehrwerte.png)
 ![Lokaler Rezeptimport aus einem Screenshot mit Prüfhinweis](docs/images/screenshot-pruefung.png)
 

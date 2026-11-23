@@ -1,5 +1,12 @@
 # Änderungen
 
+## 0.15.0
+
+- Eine Suche statt zwei: **Suchen** zeigt Lebensmittel aus dem Bundeslebensmittelschlüssel und Supermarktprodukte von Open Food Facts in einer Liste, jeweils mit kcal pro 100 g.
+- **Scannen** steht direkt neben der Suche: Kamera öffnen, Barcode erkennen, Produkt wird sofort nachgeschlagen und ausgewählt. Ohne Live-Kamera öffnet derselbe Knopf die Fotoaufnahme.
+- Barcode-Nummer von Hand und eigene Werte liegen unter **Weitere Optionen**.
+- Gewicht pro Einheit fragt nur noch nach den Einheiten, die in den Rezepten vorkommen; bei ml/l die Dichte.
+
 ## 0.14.2
 
 - Mengen & Nährwerte: Vollständige Zutaten färben nur noch den Status grün, nicht mehr die ganze Zeile.

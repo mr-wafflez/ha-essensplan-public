@@ -44,6 +44,7 @@ const theme = `:root{--primary-color:#03a9f4;--text-primary-color:#fff;--card-ba
     window.hass = {states: {}, callWS: async cmd => {
       if (cmd.type === 'essensplan/get') return structuredClone(state);
       if (cmd.type === 'essensplan/nutrition_search') return cmd.queries.map(q => fixture.search[q] || []);
+      if (cmd.type === 'essensplan/product_search') return fixture.products[cmd.query] || [];
       throw new Error('Im Bildskript nicht vorgesehen');
     }};
     const card = document.createElement('essensplan-card');
@@ -92,6 +93,15 @@ const theme = `:root{--primary-color:#03a9f4;--text-primary-color:#fff;--card-ba
   await dialog.locator('[data-filter="all"]').click();
   await page.waitForTimeout(200);
   await shot('zutaten-naehrwerte.png', dialog);
+  // One search: foods from the BLS and products, each with kcal per 100 g.
+  const cream = dialog.locator('.ing-row').filter({hasText: 'Sahne'});
+  await cream.locator('[data-edit]').click();
+  await cream.locator('[data-search]').click();
+  await cream.getByText('Beispielhof').waitFor();
+  await page.evaluate(() => card.shadowRoot.querySelector('.ing-panel').scrollIntoView({block: 'start'}));
+  await page.waitForTimeout(200);
+  await shot('suche.png', cream, 820);
+  await cream.locator('[data-cancel]').click();
   await dialog.locator('[data-close]').click();
   await dialog.waitFor({state: 'detached'});
 
