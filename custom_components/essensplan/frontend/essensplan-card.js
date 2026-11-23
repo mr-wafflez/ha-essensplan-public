@@ -1,4 +1,4 @@
-/* Essensplan 0.14.1 – bundled with the integration; no CDN or build step. */
+/* Essensplan 0.15.0 – bundled with the integration; no CDN or build step. */
 const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const localDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 function offsetDay(stamp, n) { const d = new Date(`${stamp}T12:00:00`); d.setDate(d.getDate()+n); return localDate(d); }
@@ -230,10 +230,10 @@ class EssensplanCard extends HTMLElement {
       .choice-list{display:grid;gap:2px;margin:8px 0;max-height:260px;overflow:auto}
       .check-line{display:flex;align-items:center;gap:10px;margin:6px 0}.check-line input{width:22px;height:22px;flex:0 0 auto;min-height:0}
       .choice{padding:6px 8px;border-radius:10px}.choice:has(input:checked){background:var(--secondary-background-color,#8882)}
-      .search-line{display:flex;gap:8px;align-items:end}.search-line label{flex:1;margin:6px 0 0}
-      .product-list{display:grid;gap:6px;margin:8px 0;max-height:280px;overflow:auto}
-      .product-choice{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border-radius:12px!important;min-height:0;padding:8px 12px}
-      .product-choice small{color:var(--secondary-text-color)}.product-choice[aria-pressed=true]{border-color:var(--primary-color);border-width:2px}
+      .search-line{display:flex;flex-wrap:wrap;gap:8px;align-items:end}.search-line label{flex:1 1 220px;margin:6px 0 0}
+      .choice>span{display:flex;flex-direction:column;min-width:0}.choice small{color:var(--secondary-text-color);font-size:12px}
+      .choice-heading{margin:8px 8px 2px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--secondary-text-color)}
+      .choice-list{max-height:none;overflow:visible}.scan-box{display:grid;gap:8px;margin:8px 0}
       .weight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0 10px}
       .weight-grid label{margin:8px 0 0;font-size:13px}
       details summary{cursor:pointer;margin:8px 0;font-weight:600}
@@ -259,7 +259,7 @@ class EssensplanCard extends HTMLElement {
       ha-card{
         color:var(--ep-text);border-radius:26px;border:1px solid var(--ep-edge);
         background:var(--ep-surface);
-        background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.1"),
+        background-image:url("/essensplan_static/kitchen-background.svg?v=0.15.0"),
           radial-gradient(ellipse at top left,#d9a47524,transparent 68%);
         background-size:min(100%,640px) auto,100% 360px;
         background-position:top right,top left;background-repeat:no-repeat;
@@ -290,7 +290,7 @@ class EssensplanCard extends HTMLElement {
       dialog{box-shadow:0 16px 54px #0005,inset 0 1px 0 var(--ep-glint)}
       @supports (color:color-mix(in srgb,white,black)){
         ha-card{
-          background-image:url("/essensplan_static/kitchen-background.svg?v=0.14.1"),
+          background-image:url("/essensplan_static/kitchen-background.svg?v=0.15.0"),
             radial-gradient(ellipse at 2% 0%,color-mix(in srgb,#e6ad7d 20%,transparent),transparent 63%),
             radial-gradient(ellipse at 96% 16%,color-mix(in srgb,#9baa7f 18%,transparent),transparent 65%),
             radial-gradient(ellipse at 5% 100%,color-mix(in srgb,var(--ep-accent) 12%,transparent),transparent 66%);
@@ -571,7 +571,9 @@ class EssensplanCard extends HTMLElement {
     const fields=[['kcal','Energie (kcal)'],['protein','Protein (g)'],['carbs','Kohlenhydrate (g)'],['fat','Fett (g)']];
     const weightUnits=['stück','el','tl','bund','dose','prise'];
     const relevant=weightUnits.filter(unit=>entry.units.includes(unit) || (unit==='stück' && entry.units.includes('')));
-    const others=weightUnits.filter(unit=>!relevant.includes(unit));
+    if (entry.units.some(unit=>unit==='ml' || unit==='l')) relevant.push('ml');
+    // Only grams in the recipes: no weight needed, the units stay one tap away.
+    const others=[...weightUnits,'ml'].filter(unit=>!relevant.includes(unit));
     const own=this.ownWeights(view);
     const weightInput=unit=>{
       const fallback=(entry.defaults||entry.weights)[unit];
@@ -579,156 +581,147 @@ class EssensplanCard extends HTMLElement {
       const label=unit==='ml' ? 'Gramm pro ml (Dichte)' : `Gramm pro ${this.unitLabel(unit)}`;
       return `<label>${label}<input data-weight="${unit}" inputmode="decimal" value="${esc(own[unit] ?? '')}" placeholder="${esc(hint)}"></label>`;
     };
-    let product=view.nutrition?.product;
+    const group=`choice-${entry.key}`;
     panel.innerHTML=`<label class="check-line"><input type="checkbox" data-ignore ${view.ignore?'checked':''}>
         Zählt nicht für Nährwerte (z. B. Gewürze, Wasser)</label>
       <div data-mapping>
-        <div class="search-line"><label>Lebensmittel suchen<input type="search" maxlength="200" value="${esc(entry.name)}"></label>
-          <button type="button" data-search>Suchen</button><button type="button" data-products>Produkte suchen</button></div>
-        <p class="hint">„Suchen“ nutzt den Bundeslebensmittelschlüssel. „Produkte suchen“ findet Supermarktprodukte bei Open Food Facts; dabei wird nur der Suchbegriff gesendet.</p>
-        <div class="product-list" hidden></div>
-        <div class="choice-list" role="radiogroup" aria-label="Lebensmittel für ${esc(entry.name)}"></div>
+        <div class="search-line"><label>Lebensmittel oder Produkt<input type="search" maxlength="100" value="${esc(entry.name)}"></label>
+          <button type="button" class="primary" data-search>Suchen</button>
+          <button type="button" data-scan>Scannen</button></div>
+        <div class="scan-box" hidden><video class="barcode-video" autoplay playsinline muted></video>
+          <button type="button" data-stop>Kamera schließen</button></div>
+        <input type="file" accept="image/*" capture="environment" data-photo-input hidden>
         <p class="hint" data-result role="status"></p>
+        <div class="choice-list" role="radiogroup" aria-label="Treffer für ${esc(entry.name)}"></div>
+        <p class="hint">Gesucht wird im Bundeslebensmittelschlüssel und bei Open Food Facts. An Open Food Facts gehen nur der Suchbegriff oder der Barcode; der Scan selbst läuft auf dem Gerät.</p>
         <fieldset class="weights"><legend>Gewicht pro Einheit</legend>
           <p class="hint">Damit rechnen Mengen wie „2 Stück“ oder „1 EL“. Leer lassen übernimmt den Vorschlag.</p>
-          <div class="weight-grid">${(relevant.length?relevant:['stück']).map(weightInput).join('')}</div>
-          <details><summary>Weitere Einheiten</summary><div class="weight-grid">${others.filter(u=>relevant.length||u!=='stück').map(weightInput).join('')}${weightInput('ml')}</div></details>
+          ${relevant.length?`<div class="weight-grid">${relevant.map(weightInput).join('')}</div>`:''}
+          <details><summary>${relevant.length?'Weitere Einheiten':'Einheiten'}</summary><div class="weight-grid">${others.map(weightInput).join('')}</div></details>
         </fieldset>
-        <details data-more><summary>Eigene Werte oder Barcode</summary>
-          <label class="check-line"><input type="radio" name="choice-${esc(entry.key)}" value="manual"> Eigene Werte pro 100 g</label>
+        <details data-more><summary>Weitere Optionen</summary>
+          <div class="search-line"><label>Barcode-Nummer (EAN)<input data-barcode inputmode="numeric" maxlength="14"></label>
+            <button type="button" data-lookup>Nachschlagen</button></div>
+          <label class="check-line"><input type="radio" name="${esc(group)}" value="manual"> Eigene Werte pro 100 g</label>
           <div data-manual class="weight-grid">${fields.map(([k,l])=>`<label>${l}<input name="${k}" inputmode="decimal" value="${esc(view.nutrition?.values?.[k] ?? '')}"></label>`).join('')}</div>
-          <div data-barcode-box></div>
         </details>
       </div>
       <p class="hint" data-panel-error role="alert"></p>
       <div class="actions"><button type="button" class="primary" data-apply>Übernehmen</button><button type="button" data-cancel>Abbrechen</button></div>`;
     const list=panel.querySelector('.choice-list'), feedback=panel.querySelector('[data-result]');
     const ignore=panel.querySelector('[data-ignore]'), mapping=panel.querySelector('[data-mapping]');
-    const manualRadio=panel.querySelector('[value=manual]'), more=panel.querySelector('[data-more]');
-    const group=`choice-${entry.key}`;
-    const current=()=>panel.querySelector(`input[name="${CSS.escape(group)}"]:checked`)?.value || '';
-    const labels=new Map();
-    const fill=(choices,selected=current())=>{
-      const options=[...choices];
-      if (view.nutrition?.code && !options.some(c=>c.code===view.nutrition.code)) options.unshift({code:view.nutrition.code,name:view.label||view.nutrition.code});
-      list.replaceChildren(...options.map(choice=>{
-        labels.set(choice.code,choice.name);
-        const label=document.createElement('label');
-        label.className='check-line choice';
-        label.innerHTML=`<input type="radio" name="${esc(group)}" value="${esc(choice.code)}"> <span>${esc(choice.name)}</span>`;
-        return label;
-      }));
-      if (product) {
-        const label=document.createElement('label');
-        label.className='check-line choice';
-        label.innerHTML=`<input type="radio" name="${esc(group)}" value="product"> <span>${esc(product.name)} · pro ${product.basis==='100ml'?'100 ml':'100 g'}</span>`;
-        list.append(label);
-      }
-      const none=document.createElement('label');
-      none.className='check-line choice';
-      none.innerHTML=`<input type="radio" name="${esc(group)}" value=""> <span>Noch offen lassen</span>`;
-      list.append(none);
-      const pick=selected || (choices[0]?.code ?? '');
-      const radio=panel.querySelector(`input[name="${CSS.escape(group)}"][value="${CSS.escape(pick)}"]`);
-      if (radio) radio.checked=true;
-      if (pick==='manual') more.open=true;
-      feedback.textContent=choices.length?'':'Keine Treffer. Suche anders oder gib eigene Werte ein.';
+    const more=panel.querySelector('[data-more]'), manualRadio=panel.querySelector('[value=manual]');
+    const search=panel.querySelector('[type=search]'), searchButton=panel.querySelector('[data-search]');
+    const radios=()=>[...panel.querySelectorAll(`input[name="${CSS.escape(group)}"]`)];
+    const current=()=>radios().find(radio=>radio.checked)?.value || '';
+    const select=value=>{const radio=radios().find(r=>r.value===value); if (radio) radio.checked=true;};
+    // Foods (BLS) by code, products by barcode. Product values are fetched when chosen.
+    const foods=new Map(), products=new Map(), matches=new Map();
+    let foodList=[], productList=[], allFoods=false;
+    if (view.nutrition?.code) foods.set(view.nutrition.code,{code:view.nutrition.code,name:view.label||view.nutrition.code});
+    if (view.nutrition?.product) {
+      const saved=view.nutrition.product;
+      products.set(saved.barcode,{barcode:saved.barcode,name:saved.name,saved:true,kcal:view.nutrition.values?.kcal});
+      matches.set(saved.barcode,{product:saved,values:view.nutrition.values});
+    }
+    const choice=(value,name,meta)=>{
+      const label=document.createElement('label');
+      label.className='check-line choice';
+      label.innerHTML=`<input type="radio" name="${esc(group)}" value="${esc(value)}"><span><span>${esc(name)}</span><small>${esc(meta)}</small></span>`;
+      return label;
     };
-    const initial=view.nutrition?.product ? 'product' : view.nutrition?.code || (view.nutrition?.values ? 'manual' : '');
-    fill(suggestions.get(entry.key) || [], initial);
-    if (initial==='manual') manualRadio.checked=true;
+    const heading=text=>{const p=document.createElement('p');p.className='choice-heading';p.textContent=text;return p;};
+    const kcal=value=>value===undefined||value===null||value===''?'':`${pretty(Math.round(Number(value)))} kcal/100 g`;
+    const productMeta=p=>[p.quantity,kcal(p.kcal)].filter(Boolean).join(' · ');
+    const draw=()=>{
+      const selected=current();
+      const shownFoods=[...new Map([...foodList,...foods.values()].map(f=>[f.code,f])).values()];
+      const shownProducts=[...new Map([...[...products.values()].filter(p=>p.saved||p.scanned),...productList].map(p=>[p.barcode,p])).values()];
+      const items=[];
+      if (shownProducts.some(p=>p.scanned)) {
+        items.push(heading('Gescannt'));
+        for (const p of shownProducts.filter(p=>p.scanned)) items.push(choice(`p:${p.barcode}`,p.name,productMeta(p)));
+      }
+      if (shownFoods.length) items.push(heading('Lebensmittel'));
+      // With products in the list, the first foods are enough; the rest is one tap away.
+      const limit=allFoods || !productList.length ? shownFoods.length : 4;
+      const keep=shownFoods.filter((f,index)=>index<limit || f.code===selected);
+      for (const f of keep) items.push(choice(f.code,f.name,kcal(f.kcal)));
+      if (keep.length<shownFoods.length) {
+        const button=document.createElement('button');
+        button.type='button'; button.className='link more-foods';
+        button.textContent=`${shownFoods.length-keep.length} weitere Lebensmittel anzeigen`;
+        button.onclick=()=>{allFoods=true;draw();};
+        items.push(button);
+      }
+      const rest=shownProducts.filter(p=>!p.scanned);
+      if (rest.length) items.push(heading('Produkte'));
+      for (const p of rest) items.push(choice(`p:${p.barcode}`,p.name,productMeta(p)));
+      items.push(choice('','Noch offen lassen',''));
+      list.replaceChildren(...items);
+      select(selected);
+      if (!current()) select(shownFoods[0]?.code ?? '');
+    };
+    const remember=(barcode,match,extra={})=>{
+      matches.set(barcode,match);
+      products.set(barcode,{...products.get(barcode),barcode,name:match.product.name,kcal:match.values.kcal,...extra});
+      for (const [k] of fields) panel.querySelector(`[name=${k}]`).value=match.values[k];
+    };
+    foodList=suggestions.get(entry.key) || [];
+    draw();
+    select(view.nutrition?.product ? `p:${view.nutrition.product.barcode}` : view.nutrition?.code || (view.nutrition?.values ? 'manual' : current()));
+    if (view.nutrition?.values && !view.nutrition.product && !view.nutrition.code) more.open=true;
     const display=()=>{mapping.hidden=ignore.checked;};
     ignore.onchange=display; display();
-    const search=panel.querySelector('[type=search]'), searchButton=panel.querySelector('[data-search]');
     searchButton.onclick=async()=>{
+      const query=search.value.trim();
+      if (!query) {feedback.textContent='Gib ein Lebensmittel oder Produkt ein.';search.focus();return;}
       searchButton.disabled=true; feedback.textContent='Suche läuft …';
-      try {const [results]=await this._hass.callWS({type:'essensplan/nutrition_search',queries:[search.value]});fill(results,'');}
-      catch(err) {feedback.textContent=err.message || 'Suche fehlgeschlagen.';}
-      finally {searchButton.disabled=false;}
+      const local=this._hass.callWS({type:'essensplan/nutrition_search',queries:[query]});
+      const remote=query.length>=2 ? this._hass.callWS({type:'essensplan/product_search',query}) : Promise.resolve([]);
+      try {[foodList]=await local;}
+      catch(err) {foodList=[];}
+      productList=[]; allFoods=false; draw();
+      select(foodList[0]?.code ?? '');
+      feedback.textContent='Produkte werden gesucht …';
+      try {productList=await remote; feedback.textContent='';}
+      catch(err) {feedback.textContent=`Produkte: ${err.message || 'Suche fehlgeschlagen.'}`;}
+      draw();
+      if (!foodList.length && !productList.length) feedback.textContent='Keine Treffer. Versuche einen anderen Begriff, scanne den Barcode oder gib eigene Werte ein.';
+      searchButton.disabled=false;
     };
     search.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();searchButton.click();}};
-    const applyProduct=match=>{
-      product=match.product;
-      for (const [k] of fields) panel.querySelector(`[name=${k}]`).value=match.values[k];
-      fill([...list.querySelectorAll('input')].map(i=>i.value).filter(v=>v && v!=='product' && v!=='manual')
-        .map(code=>({code,name:labels.get(code)})),'product');
-    };
-    this.barcodeBox(panel.querySelector('[data-barcode-box]'), applyProduct);
-    const productList=panel.querySelector('.product-list'), productButton=panel.querySelector('[data-products]');
-    productButton.onclick=async()=>{
-      productButton.disabled=true; productList.hidden=false;
-      productList.innerHTML='<p class="hint">Produkte werden gesucht …</p>';
+    const lookup=async(barcode,extra={})=>{
+      feedback.textContent='Produkt wird nachgeschlagen …';
       try {
-        const hits=await this._hass.callWS({type:'essensplan/product_search',query:search.value});
-        productList.innerHTML=hits.length?'<p class="hint"><strong>Produkte (Open Food Facts)</strong> · Werte pro 100 g bzw. 100 ml, bitte prüfen</p>':
-          '<p class="hint">Keine Produkte mit vollständigen Nährwerten gefunden.</p>';
-        for (const hit of hits) {
-          const button=document.createElement('button');
-          button.type='button'; button.className='product-choice';
-          button.innerHTML=`<span>${esc(hit.name)}</span><small>${esc([hit.quantity,`${hit.kcal} kcal`].filter(Boolean).join(' · '))}</small>`;
-          button.onclick=async()=>{
-            button.disabled=true;
-            try {
-              applyProduct(await this._hass.callWS({type:'essensplan/barcode_lookup',barcode:hit.barcode}));
-              for (const other of productList.querySelectorAll('.product-choice')) other.setAttribute('aria-pressed',String(other===button));
-              feedback.textContent=`${hit.name} ausgewählt.`;
-            } catch(err) {feedback.textContent=err.message || 'Produktabruf fehlgeschlagen.';}
-            finally {button.disabled=false;}
-          };
-          productList.append(button);
-        }
-      } catch(err) {productList.innerHTML=`<p class="hint">${esc(err.message || 'Produktsuche fehlgeschlagen.')}</p>`;}
-      finally {productButton.disabled=false;}
-    };
-    panel.querySelector('[data-cancel]').onclick=()=>{this._barcodeStop?.();onCancel();};
-    panel.querySelector('[data-apply]').onclick=()=>{
-      const error=panel.querySelector('[data-panel-error]');
-      const weights={};
-      for (const input of panel.querySelectorAll('[data-weight]')) {
-        const value=input.value.trim().replace(',','.');
-        if (!value) continue;
-        if (!(Number(value)>0)) {error.textContent=`Bitte ein Gewicht größer als 0 eingeben (${this.unitLabel(input.dataset.weight)}).`;input.focus();return;}
-        weights[input.dataset.weight]=value;
+        const match=await this._hass.callWS({type:'essensplan/barcode_lookup',barcode});
+        remember(match.product.barcode,match,extra);
+        draw(); select(`p:${match.product.barcode}`);
+        feedback.textContent=`${match.product.name} · Werte pro ${match.product.basis==='100ml'?'100 ml':'100 g'} bitte prüfen.`;
+        return match;
+      } catch(err) {
+        feedback.textContent=`${err.message || 'Produktabruf fehlgeschlagen.'} Du kannst suchen oder unter „Weitere Optionen“ eigene Werte eingeben.`;
+        return null;
       }
-      const choice=current();
-      let nutrition=null, label='';
-      if (choice==='manual' || choice==='product') {
-        const values=Object.fromEntries(fields.map(([k])=>[k,panel.querySelector(`[name=${k}]`).value.trim().replace(',','.')]));
-        if (Object.values(values).some(v=>v==='' || !Number.isFinite(Number(v)))) {error.textContent='Bitte alle vier Werte pro 100 g eingeben.';more.open=true;return;}
-        nutrition=choice==='product'?{values,product}:{values};
-        label=choice==='product'?product.name:'Eigene Werte';
-      } else if (choice) {
-        nutrition={code:choice}; label=labels.get(choice) || choice;
-      }
-      this._barcodeStop?.();
-      onApply({raw:{name:entry.name,nutrition,weights,ignore:ignore.checked},label});
     };
-    return panel;
-  }
-  barcodeBox(box, onProduct) {
-    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.14.1');
-    box.innerHTML=`<p class="hint">Der Scan läuft lokal. Beim Nachschlagen wird nur der Barcode an Open Food Facts gesendet.</p>
-      <div class="actions"><button type="button" data-camera>Barcode scannen</button>
-        <button type="button" data-photo>Barcode-Foto</button><button type="button" data-stop hidden>Kamera schließen</button></div>
-      <video class="barcode-video" autoplay playsinline muted hidden></video>
-      <input type="file" accept="image/*" capture="environment" hidden>
-      <div class="search-line"><label>EAN / UPC<input data-barcode inputmode="numeric" maxlength="14"></label>
-        <button type="button" data-lookup>Produkt nachschlagen</button></div><p data-barcode-status class="hint" role="status"></p>`;
+    // Choosing a product from the search loads its checked values right away.
+    list.addEventListener('change',event=>{
+      const value=event.target.value;
+      if (value.startsWith('p:') && !matches.has(value.slice(2))) lookup(value.slice(2));
+    });
+    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.15.0');
+    const scanBox=panel.querySelector('.scan-box'), video=scanBox.querySelector('video'), scan=panel.querySelector('[data-scan]');
+    const photo=panel.querySelector('[data-photo-input]');
     const stopCamera=()=>{this._barcodeStop?.();this._barcodeStop=null;};
-    const video=box.querySelector('video'), stop=box.querySelector('[data-stop]');
-    const barcode=box.querySelector('[data-barcode]'), status=box.querySelector('[data-barcode-status]');
-    const camera=box.querySelector('[data-camera]'), file=box.querySelector('[type=file]');
     const found=code=>{
-      if (!box.isConnected) return;
+      if (!panel.isConnected) return;
       stopCamera();
-      barcode.value=code;
-      status.textContent='Barcode erkannt. Tippe auf „Produkt nachschlagen“.';
-      barcode.focus();
+      panel.querySelector('[data-barcode]').value=code;
+      lookup(code,{scanned:true});
     };
-    const openPhoto=()=>{stopCamera();file.click();};
     let usePhoto=!navigator.mediaDevices?.getUserMedia;
-    if (usePhoto) camera.textContent='Barcode fotografieren';
-    camera.onclick=async()=>{
+    const openPhoto=()=>{stopCamera();photo.click();};
+    scan.onclick=async()=>{
       if (usePhoto) {openPhoto();return;}
       stopCamera();
       const controller=new AbortController();
@@ -736,53 +729,70 @@ class EssensplanCard extends HTMLElement {
       this._barcodeStop=()=>{
         controller.abort();
         stream?.getTracks().forEach(track=>track.stop());
-        video.hidden=stop.hidden=true;
-        camera.disabled=false;
+        scanBox.hidden=true; scan.disabled=false;
       };
-      camera.disabled=true; stop.hidden=false;
-      status.textContent='Kamera wird geöffnet …';
+      scan.disabled=true;
+      feedback.textContent='Kamera wird geöffnet …';
       try {
         // Ask before loading the decoder so the request starts in the tap handler.
         stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
         if (controller.signal.aborted) {stream.getTracks().forEach(track=>track.stop());return;}
         const decoder=await scanner();
         if (controller.signal.aborted) return;
-        video.hidden=false;
-        status.textContent='Halte den Barcode in die Kamera.';
+        scanBox.hidden=false;
+        feedback.textContent='Halte den Barcode in die Kamera.';
         await decoder.scanCamera(stream,video,controller.signal,found);
       } catch(err) {
         if (controller.signal.aborted) return;
         stopCamera();
         usePhoto=true;
-        camera.textContent='Barcode fotografieren';
-        status.textContent=err.name==='NotAllowedError'
-          ? 'Kamerazugriff verweigert. Tippe auf „Barcode fotografieren“ oder gib den Code ein.'
-          : 'Live-Kamera konnte nicht gestartet werden. Tippe auf „Barcode fotografieren“ oder gib den Code ein.';
-        camera.focus();
+        feedback.textContent=err.name==='NotAllowedError'
+          ? 'Kamerazugriff verweigert. Tippe noch einmal auf „Scannen“, um ein Foto vom Barcode zu machen.'
+          : 'Die Live-Kamera ist hier nicht verfügbar (sie braucht HTTPS). Tippe noch einmal auf „Scannen“, um ein Foto vom Barcode zu machen.';
+        scan.focus();
       }
     };
-    stop.onclick=stopCamera;
-    box.querySelector('[data-photo]').onclick=openPhoto;
-    file.onchange=async()=>{
-      const image=file.files[0];
-      file.value='';
+    panel.querySelector('[data-stop]').onclick=stopCamera;
+    photo.onchange=async()=>{
+      const image=photo.files[0];
+      photo.value='';
       if (!image) return;
-      status.textContent='Barcode wird lokal gelesen …';
+      feedback.textContent='Barcode wird auf dem Gerät gelesen …';
       try {found(await (await scanner()).scanPhoto(image));}
-      catch(err) {status.textContent=err.message;}
+      catch(err) {feedback.textContent=err.message;}
     };
-    const lookup=box.querySelector('[data-lookup]');
-    lookup.onclick=async()=>{
-      lookup.disabled=true;
-      status.textContent='Produkt wird gesucht …';
-      try {
-        const match=await this._hass.callWS({type:'essensplan/barcode_lookup',barcode:barcode.value.trim()});
-        onProduct(match);
-        status.textContent=`${match.product.name} gefunden. Prüfe die Angaben pro ${match.product.basis==='100ml'?'100 ml':'100 g'}.`;
-      } catch(err) {status.textContent=err.message || 'Produktabruf fehlgeschlagen.';}
-      finally {lookup.disabled=false;}
+    const barcodeInput=panel.querySelector('[data-barcode]'), lookupButton=panel.querySelector('[data-lookup]');
+    lookupButton.onclick=async()=>{lookupButton.disabled=true;await lookup(barcodeInput.value.trim(),{scanned:true});lookupButton.disabled=false;};
+    barcodeInput.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();lookupButton.click();}};
+    panel.querySelector('[data-cancel]').onclick=()=>{stopCamera();onCancel();};
+    panel.querySelector('[data-apply]').onclick=async()=>{
+      const error=panel.querySelector('[data-panel-error]');
+      error.textContent='';
+      const weights={};
+      for (const input of panel.querySelectorAll('[data-weight]')) {
+        const value=input.value.trim().replace(',','.');
+        if (!value) continue;
+        if (!(Number(value)>0)) {error.textContent=`Bitte ein Gewicht größer als 0 eingeben (${this.unitLabel(input.dataset.weight)}).`;input.focus();return;}
+        weights[input.dataset.weight]=value;
+      }
+      const picked=current();
+      let nutrition=null, label='';
+      if (picked.startsWith('p:')) {
+        const match=matches.get(picked.slice(2)) || await lookup(picked.slice(2));
+        if (!match) {error.textContent='Für dieses Produkt fehlen Nährwerte. Wähle einen anderen Treffer.';return;}
+        nutrition={values:match.values,product:match.product}; label=match.product.name;
+      } else if (picked==='manual') {
+        const values=Object.fromEntries(fields.map(([k])=>[k,panel.querySelector(`[name=${k}]`).value.trim().replace(',','.')]));
+        if (Object.values(values).some(v=>v==='' || !Number.isFinite(Number(v)))) {error.textContent='Bitte alle vier Werte pro 100 g eingeben.';more.open=true;return;}
+        nutrition={values}; label='Eigene Werte';
+      } else if (picked) {
+        nutrition={code:picked}; label=foods.get(picked)?.name || foodList.find(f=>f.code===picked)?.name || picked;
+      }
+      stopCamera();
+      onApply({raw:{name:entry.name,nutrition,weights,ignore:ignore.checked},label});
     };
-    barcode.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();lookup.click();}};
+    manualRadio.addEventListener('change',()=>{more.open=true;});
+    return panel;
   }
   ingredientDialog(title) {
     const root=this.shadowRoot;
@@ -932,7 +942,7 @@ class EssensplanCard extends HTMLElement {
         if (info.status==='ok') complete++;
         if (info.status==='ignored') ignored++;
         const row=document.createElement('div');
-        row.className=`amount-row ${info.status}`;
+        row.className=`amount-row status-${info.status}`;
         row.innerHTML=`<input aria-label="Menge ${esc(item.name)}" data-qty inputmode="decimal" value="${esc(item.quantity==null?'':String(item.quantity).replace('.',','))}" placeholder="Menge">
           <select aria-label="Einheit ${esc(item.name)}" data-unit>${units.map(u=>`<option value="${u}"${(item.unit||'')===u?' selected':''}>${this.unitLabel(u)}</option>`).join('')}</select>
           <div class="amount-name"><strong>${esc(item.name)}</strong><div class="amount-state">${describe(item,view,info)}</div></div>
@@ -968,7 +978,7 @@ class EssensplanCard extends HTMLElement {
     const refresh=(row,index)=>{
       const item=items[index], entry=this.ingredientEntry(item.name), view=this.ingredientView(entry, staged);
       const info=this.amountStatus(item, view, item.useList);
-      row.className=`amount-row ${info.status}`;
+      row.className=`amount-row status-${info.status}`;
       row.querySelector('[data-unit]').value=item.unit||'';
       row.querySelector('.amount-state').innerHTML=describe(item,view,info);
       row.querySelector('[data-edit]').textContent=info.status==='weight'?'Gewicht':'Zuordnen';
@@ -1363,7 +1373,7 @@ class EssensplanCard extends HTMLElement {
         choose.disabled=true;
         status.textContent='Screenshots werden lokal gelesen …';
         try {
-          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.14.1');
+          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.15.0');
           const result=await ocr.recognizeRecipe(selected,(page,progress)=>{
             if (active()) status.textContent=`Bild ${page} von ${selected.length} wird lokal gelesen … ${progress} %`;
           },controller.signal);

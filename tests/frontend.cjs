@@ -170,8 +170,14 @@ const assert = require('node:assert/strict');
  await chicken.locator('[data-edit]').click();
  const panel=chicken.locator('.ing-panel');
  assert(await panel.locator('input[type=radio][value="A1"]').isChecked());
- await panel.getByText('Eigene Werte oder Barcode').click();
- // A genuine EAN-13 image goes through the bundled decoder, then requires an explicit lookup.
+ // One search button: local foods first, then products from Open Food Facts, each with kcal per 100 g.
+ await panel.locator('[data-search]').click();
+ await panel.getByText('Hackfleisch gemischt · Landjunker').waitFor();
+ assert.deepEqual(await panel.locator('.choice-heading').allInnerTexts(),['LEBENSMITTEL','PRODUKTE']);
+ assert.match(await panel.locator('.choice').filter({hasText:'Landjunker'}).innerText(),/500 g · 234 kcal\/100 g/);
+ assert(await panel.locator('input[type=radio][value="A1"]').isChecked());
+ assert(await page.evaluate(()=>calls.some(c=>c.type==='essensplan/product_search' && c.query==='Hähnchen')));
+ // Scanning: without a live camera the scan button takes a photo; the code is decoded locally and looked up at once.
  const barcodeImage=await page.evaluate(()=>{
   const code='3017620422003', left=['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
   const parity='LLGGGL';
@@ -183,19 +189,16 @@ const assert = require('node:assert/strict');
   ctx.fillStyle='black';[...bits].forEach((bit,i)=>{if(bit==='1')ctx.fillRect(40+i*4,16,4,140);});
   return canvas.toDataURL('image/png').split(',')[1];
  });
- const photoButton=panel.getByRole('button',{name:'Barcode fotografieren'});
  const chooserEvent=page.waitForEvent('filechooser');
- await photoButton.click();
+ await panel.locator('[data-scan]').click();
  const chooser=await chooserEvent;
  assert.equal(await chooser.element().getAttribute('capture'),'environment');
  await chooser.setFiles({name:'barcode.png',mimeType:'image/png',buffer:Buffer.from(barcodeImage,'base64')});
- await panel.getByText('Barcode erkannt.',{exact:false}).waitFor();
- assert.equal(await panel.locator('[data-barcode]').inputValue(),'3017620422003');
- assert(await page.evaluate(()=>!calls.some(cmd=>cmd.type==='essensplan/barcode_lookup')));
- await panel.locator('[data-lookup]').click();
- await panel.getByText('Testprodukt gefunden.',{exact:false}).waitFor();
+ await panel.getByText('Testprodukt · Werte pro 100 g bitte prüfen.').waitFor();
+ assert(await page.evaluate(()=>calls.some(cmd=>cmd.type==='essensplan/barcode_lookup' && cmd.barcode==='3017620422003')));
+ assert(await panel.locator('input[type=radio][value="p:3017620422003"]').isChecked());
+ assert.equal(await panel.locator('.choice-heading').first().innerText(),'GESCANNT');
  assert.equal(await panel.locator('[name=kcal]').inputValue(),'539');
- assert(await panel.locator('input[type=radio][value="product"]').isChecked());
  await panel.locator('[data-apply]').click();
  assert.match(await chicken.innerText(),/✓ Testprodukt/);
  assert.equal(await nutritionDialog.locator('[data-save]').innerText(),'1 Änderung speichern');
@@ -214,17 +217,16 @@ const assert = require('node:assert/strict');
  }}));
  await card.locator('[data-ingredients]').click();
  await nutritionDialog.locator('.ing-row[data-key="zwiebel"] [data-edit]').click();
- await nutritionDialog.getByText('Eigene Werte oder Barcode').click();
- await nutritionDialog.getByRole('button',{name:'Barcode scannen'}).click();
+ await nutritionDialog.locator('[data-scan]').click();
  await nutritionDialog.getByText('Kamerazugriff verweigert.',{exact:false}).waitFor();
  const fallbackEvent=page.waitForEvent('filechooser');
- await nutritionDialog.getByRole('button',{name:'Barcode fotografieren'}).click();
+ await nutritionDialog.locator('[data-scan]').click();
  await (await fallbackEvent).setFiles([]);
- // Text search at Open Food Facts sends the term, then the chosen product goes through the barcode lookup.
- await nutritionDialog.locator('[data-products]').click();
- await nutritionDialog.locator('.product-choice').first().click();
- await nutritionDialog.getByText('Hackfleisch gemischt · Landjunker ausgewählt.').waitFor();
- assert(await nutritionDialog.locator('.ing-panel input[type=radio][value="product"]').isChecked());
+ // Choosing a product from the search loads its values through the checked barcode lookup.
+ await nutritionDialog.locator('.ing-panel [data-search]').click();
+ await nutritionDialog.locator('.choice').filter({hasText:'Landjunker'}).click();
+ await nutritionDialog.getByText('Testprodukt · Werte pro 100 g bitte prüfen.').waitFor();
+ assert(await nutritionDialog.locator('.ing-panel input[type=radio][value="p:4056489116066"]').isChecked());
  assert(await page.evaluate(()=>calls.some(c=>c.type==='essensplan/product_search' && c.query==='Zwiebel') &&
   calls.some(c=>c.type==='essensplan/barcode_lookup' && c.barcode==='4056489116066')));
  await nutritionDialog.locator('[data-close]').click();
