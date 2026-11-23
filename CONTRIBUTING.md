@@ -20,3 +20,5 @@ HA-Schnittstelle; er braucht keine produktive Instanz oder Zugangsdaten.
 Ändert sich eine Funktion, die Bedienung oder die Installation, gehören
 `README.md` und `CHANGELOG.md` in denselben Pull Request, damit die
 Beschreibung immer dem aktuellen Stand entspricht.
+
+Die vollständige Arbeitsweise (Ablauf, Releases, Prüfungen) steht in [AGENTS.md](AGENTS.md).
