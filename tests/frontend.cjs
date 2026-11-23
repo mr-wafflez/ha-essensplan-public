@@ -16,17 +16,23 @@ const assert = require('node:assert/strict');
  await page.route('http://essensplan.test/essensplan_static/**',route=>{
   const name=new URL(route.request().url()).pathname.slice('/essensplan_static/'.length);
   if (name==='recipe-placeholder.svg') return route.fallback();
-  if (!/^(recipe-ocr\.mjs|barcode\/(?:scanner\.mjs|zxing-browser\.min\.js)|ocr\/[a-z0-9.-]+)$/.test(name)) return route.fulfill({status:404,body:''});
+  if (!/^(essensplan-card\.js|card\/[a-z]+\.mjs|recipe-ocr\.mjs|barcode\/(?:scanner\.mjs|zxing-browser\.min\.js)|ocr\/[a-z0-9.-]+)$/.test(name)) return route.fulfill({status:404,body:''});
   return route.fulfill({path:path.join(__dirname,'../custom_components/essensplan/frontend',name),
    contentType:/\.m?js$/.test(name)?'text/javascript':'application/octet-stream'});
  });
  await page.goto('http://essensplan.test/');
- await page.addScriptTag({path:path.join(__dirname,'../custom_components/essensplan/frontend/essensplan-card.js')});
+ // Loaded as an ES module with its card/*.mjs imports, as Home Assistant does.
+ await page.addScriptTag({url:'http://essensplan.test/essensplan_static/essensplan-card.js?v=test',type:'module'});
+ await page.waitForFunction(()=>customElements.get('essensplan-card'));
  await page.evaluate(()=>{
   window.state={today:'2026-10-15',revision:0,completed:[],shopping_week:'2026-10-12',shopping:[{uid:'s1',summary:'500 g Hähnchen',completed:false}],
    recipes:{r1:{id:'r1',name:'Hähnchen-Curry <sicher>',servings:'4',image:'',ingredients:[{quantity:'500',unit:'g',name:'Hähnchen'}],steps:['Hähnchen würfeln.','Mit Kokosmilch garen.']}},plan:{'2026-10-15':{recipe_id:'r1',servings:'2'}}};
   window.calls=[];
-  window.hass={states:{},callWS:async cmd=>{calls.push(cmd);
+  window.pushes=[];
+  window.hass={states:{},connection:{subscribeMessage:async(callback,message)=>{
+   pushes.push({callback,message});return ()=>{pushes.splice(pushes.findIndex(p=>p.callback===callback),1);};}},
+  callWS:async cmd=>{calls.push(cmd);
+  if(cmd.type==='essensplan/ingredients') return {revision:state.revision,ingredient_list:structuredClone(state.ingredient_list||[])};
   if(cmd.type==='essensplan/barcode_lookup') return {product:{barcode:cmd.barcode,name:'Testprodukt',basis:'100g'},
    values:{kcal:'539',protein:'6.3',carbs:'57.5',fat:'30.9'}};
   if(cmd.type==='essensplan/product_search') return [{barcode:'4056489116066',name:'Hackfleisch gemischt · Landjunker',quantity:'500 g',kcal:234}];
@@ -44,7 +50,7 @@ const assert = require('node:assert/strict');
     if(cmd.operation==='save_amounts') state.recipes[cmd.payload.id].ingredients.forEach((item,i)=>{
      item.quantity=cmd.payload.items[i].quantity||null;item.unit=cmd.payload.items[i].unit;});
     const done=cmd.operation==='save_amounts';
-    state.nutrition={r1:{used:done?2:1,missing:done?[]:['Zwiebel'],items:[{name:'Hähnchen',status:'ok'},{name:'Zwiebel',status:done?'ok':'amount'},{name:'Salz',status:'ignored'}],
+    state.nutrition={r1:{used:done?2:1,open:done?{}:{amount:['Zwiebel']},
      portion:{kcal:125,protein:20,carbs:1,fat:3},total:{kcal:500,protein:80,carbs:4,fat:12}}};
    }
    if(cmd.operation==='favorite'){state.recipes[cmd.payload.id].favorite=cmd.payload.favorite;}
@@ -79,6 +85,15 @@ const assert = require('node:assert/strict');
   if (process.env.ESSENSPLAN_DOC_IMAGES) await locator.screenshot({path:path.join(process.env.ESSENSPLAN_DOC_IMAGES,name+'.png'),animations:'disabled'});
  };
  await card.locator('#today').waitFor();
+ // Changes are pushed by Home Assistant: one subscription, a reload only for a new revision or day.
+ await page.waitForFunction(()=>pushes.length===1);
+ assert.deepEqual(await page.evaluate(()=>pushes[0].message),{type:'essensplan/subscribe'});
+ const reloads=()=>page.evaluate(()=>calls.filter(c=>c.type==='essensplan/get').length);
+ const before=await reloads();
+ await page.evaluate(()=>pushes[0].callback({revision:state.revision,today:state.today}));
+ assert.equal(await reloads(),before);
+ await page.evaluate(()=>{state.revision++;pushes[0].callback({revision:state.revision,today:state.today});});
+ await page.waitForFunction(n=>calls.filter(c=>c.type==='essensplan/get').length===n+1,before);
  assert.match(await card.locator('#today').innerText(),/Hähnchen-Curry <sicher>/);
  assert.equal(await card.locator('nav [data-mode]').count(),4);
  assert.equal(await card.locator('nav [data-mode="today"]').getAttribute('aria-current'),'page');
@@ -153,7 +168,7 @@ const assert = require('node:assert/strict');
   state.recipes.r1.ingredients.push({name:'Zwiebel',quantity:null,unit:''},{name:'Salz',quantity:null,unit:''});
   state.ingredient_list=[entry('hahnchen','Hähnchen',{units:['g']}),entry('zwiebel','Zwiebel',{unmeasured:1}),
    entry('salz','Salz',{status:'ignored',ignore:true,ignore_default:true,unmeasured:1})];
-  state.nutrition={r1:{used:0,missing:['Hähnchen','Zwiebel'],items:[{name:'Hähnchen',status:'mapping'},{name:'Zwiebel',status:'amount'},{name:'Salz',status:'ignored'}],
+  state.nutrition={r1:{used:0,open:{mapping:['Hähnchen'],amount:['Zwiebel']},
    portion:{kcal:0,protein:0,carbs:0,fat:0},total:{kcal:0,protein:0,carbs:0,fat:0}}};
   state.modules={nutrition:true};return card.load();
  });

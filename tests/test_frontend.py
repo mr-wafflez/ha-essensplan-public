@@ -180,6 +180,19 @@ class FrontendTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(version, self.module.VERSION)
         panel = (COMPONENT / 'frontend' / 'essensplan-panel.js').read_text()
         self.assertIn(f"import './essensplan-card.js?v={version}'", panel)
+        # Every module and asset URL carries the same version, so a browser never mixes
+        # cached parts of an older release with a newer one.
+        import re
+        frontend = COMPONENT / 'frontend'
+        sources = [frontend / 'essensplan-card.js', frontend / 'essensplan-panel.js',
+                   frontend / 'barcode' / 'scanner.mjs', *sorted((frontend / 'card').glob('*.mjs'))]
+        found = {(path.name, v) for path in sources for v in re.findall(r'\?v=(\d+\.\d+\.\d+)', path.read_text())}
+        self.assertTrue(found)
+        self.assertEqual({v for _, v in found}, {version}, sorted(found))
+        card = (frontend / 'essensplan-card.js').read_text()
+        for module in sorted((frontend / 'card').glob('*.mjs')):
+            if module.name != 'util.mjs':
+                self.assertIn(f"./card/{module.name}?v={version}", card)
 
 
 if __name__ == '__main__':

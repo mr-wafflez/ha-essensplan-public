@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.16.0
+
+- Schneller und sparsamer: Home Assistant meldet Änderungen und den Tageswechsel an die geöffneten Karten, statt dass jede Karte jede Minute den ganzen Datenstand abruft. Ein Abruf ist bei 82 Rezepten rund 82 KB statt 190 KB groß; die Zutatenliste lädt erst mit den Nährwert-Dialogen.
+- Die Karte ist in Module aufgeteilt (Plan, Rezepte, Nährwerte, Einkauf, Styles, Hilfsfunktionen). Für die Bedienung ändert sich nichts.
+- GitHub Actions testet die Integration zusätzlich in einem echten Home Assistant (älteste unterstützte und aktuelle Version), bevor ein Release entsteht.
+
 ## 0.15.0
 
 - Eine Suche statt zwei: **Suchen** zeigt Lebensmittel aus dem Bundeslebensmittelschlüssel und Supermarktprodukte von Open Food Facts in einer Liste, jeweils mit kcal pro 100 g.

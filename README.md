@@ -341,7 +341,7 @@ Rezepte, Plan und Einkaufsstatus liegen im HA-Konfigurationsordner unter `.stora
 
 Alle angemeldeten HA-Nutzer können diese gemeinsame Haushaltssammlung über die API lesen und bearbeiten. Eine ausgeblendete Dashboard-Schaltfläche ist keine Berechtigungssperre. Keine eigenen Tokens, externen Benutzerkonten oder externen Rezeptdienste erforderlich.
 
-Die Karte lädt Daten über die angemeldete HA-WebSocket-Verbindung. Sensoränderungen und ein zusätzlicher 60-Sekunden-Abruf aktualisieren andere Karten. Während der Rezeptbearbeitung wird der ungespeicherte Text nicht durch Hintergrundabrufe ersetzt; ein inzwischen geänderter Datenstand verhindert das Überschreiben beim Speichern. Dann abbrechen, Daten neu öffnen und Änderungen übernehmen.
+Die Karte lädt Daten über die angemeldete HA-WebSocket-Verbindung. Home Assistant meldet jede Änderung und den Tageswechsel an alle geöffneten Karten, die dann neu laden; ein Abruf alle zehn Minuten dient nur als Rückfall. Die umfangreiche Zutatenliste des Nährwertmoduls wird erst geladen, wenn ein Nährwert-Dialog geöffnet wird. Während der Rezeptbearbeitung wird der ungespeicherte Text nicht durch Hintergrundabrufe ersetzt; ein inzwischen geänderter Datenstand verhindert das Überschreiben beim Speichern. Dann abbrechen, Daten neu öffnen und Änderungen übernehmen.
 
 ## Grenzen und nächste sinnvolle Erweiterungen
 
@@ -355,7 +355,12 @@ Das Layout reagiert auf schmale Displays. Ein vollständiger Wochenplan oder lan
 python -m unittest discover -s tests -v
 node --test tests/frontend-unit.cjs tests/image-upload-unit.cjs tests/panel-unit.cjs
 node --check custom_components/essensplan/frontend/essensplan-card.js
+node --check custom_components/essensplan/frontend/card/*.mjs
 ```
+
+Die Laufzeittests `tests/ha_runtime_*.py` starten die Integration in einem echten Home Assistant mit temporärem Konfigurationsordner (Frontend-Registrierung, Einkaufslisten-Abgleich, Optionen, WebSocket-Befehle). Sie brauchen Python 3.14 und `pip install homeassistant`, Aufruf z. B. mit `python tests/ha_runtime_websocket.py custom_components/essensplan`. GitHub Actions führt sie gegen die älteste unterstützte (laut `hacs.json`) und die aktuelle Home-Assistant-Version aus.
+
+Die Karte besteht aus `frontend/essensplan-card.js` (Laden, Navigation, Darstellung) und den Modulen unter `frontend/card/` (Plan, Rezepte, Nährwerte, Einkauf, Styles, Hilfsfunktionen). Es gibt keinen Build-Schritt; Home Assistant lädt die Module direkt.
 
 `tests/frontend.cjs` enthält einen Browser-Smoke-Test über Playwright mit simulierter HA-WebSocket-Grenze. Er benötigt Playwright und dessen Chromium. Im Codex-Runtime kann er `CODEX_PRIMARY_RUNTIME_NODE_MODULES` verwenden, andernfalls löst er Playwright aus lokal installierten Node-Modulen auf. Ausführen mit `node tests/frontend.cjs`.
 

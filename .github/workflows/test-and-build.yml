@@ -39,11 +39,39 @@ jobs:
           path: dist/essensplan-*.zip
           if-no-files-found: error
 
+  # The integration inside a real Home Assistant: frontend registration, todo sync,
+  # options flow and the card's WebSocket commands. Oldest supported (hacs.json) and current.
+  ha-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        homeassistant: ['2026.10.0', '2026.11.1']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Home Assistant ${{ matrix.homeassistant }} installieren
+        run: |
+          python -m pip install --upgrade pip uv
+          uv pip install --system "homeassistant==${{ matrix.homeassistant }}"
+      - name: Laufzeittests
+        run: |
+          for test in tests/ha_runtime_*.py; do
+            echo "::group::$test"
+            python "$test" custom_components/essensplan
+            echo "::endgroup::"
+          done
+
   # After a merge to main: create tag and release for the manifest version once.
   # The Marketplace (HACS) offers the newest release as the update, so a missing
   # release would roll installations back to the previous version.
   release:
-    needs: verify-and-build
+    needs: [verify-and-build, ha-runtime]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10

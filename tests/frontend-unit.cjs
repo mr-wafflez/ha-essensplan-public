@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const source=fs.readFileSync(path.join(__dirname,'../custom_components/essensplan/frontend/essensplan-card.js'),'utf8');
+const source=require('./card-source.cjs').cardSource();
 function makeCard(config={mode:'today'}) {
  let Klass;
  const tile={dataset:{todaySlot:'0'}},error={textContent:''};

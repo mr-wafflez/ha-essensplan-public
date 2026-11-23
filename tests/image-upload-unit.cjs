@@ -13,7 +13,7 @@ function setup({width=4000,height=3000,decodeFails=false}={}) {
     URL:{createObjectURL:()=> 'blob:test',revokeObjectURL:url=>revoked.push(url)},
     Image:class{naturalWidth=width;naturalHeight=height;set src(_value){queueMicrotask(()=>decodeFails?this.onerror():this.onload());}},
     document:{createElement(){canvas={getContext:()=>context,toBlob(callback,type,quality){request={type,quality};callback(new Blob(['jpeg'],{type}));}};return canvas;}}};
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../custom_components/essensplan/frontend/essensplan-card.js'),'utf8'),sandbox);
+  vm.runInNewContext(require('./card-source.cjs').cardSource(),sandbox);
   const headers={'image/jpeg':[255,216,255],'image/png':[137,80,78,71,13,10,26,10],'image/webp':Buffer.from('RIFF0000WEBP')};
   const prepare=(type='image/png',size=1024,maxMB=20,header=headers[type])=>sandbox.prepareRecipeImage({type,size,slice:()=>new Blob([Uint8Array.from(header||[])] )},maxMB);
   return {prepare,card:()=>Object.create(Klass.prototype),revoked,canvas:()=>canvas,request:()=>request};
