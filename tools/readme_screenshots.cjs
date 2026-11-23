@@ -27,7 +27,7 @@ const theme = `:root{--primary-color:#03a9f4;--text-primary-color:#fff;--card-ba
   await page.route(url => url.origin !== 'http://essensplan.test', route => route.abort());
   await page.route('http://essensplan.test/essensplan_static/**', route => {
     const name = new URL(route.request().url()).pathname.slice('/essensplan_static/'.length);
-    if (!/^(recipe-ocr\.mjs|recipe-placeholder\.svg|kitchen-background\.svg|ocr\/[a-z0-9.-]+)$/.test(name)) {
+    if (!/^(essensplan-card\.js|card\/[a-z]+\.mjs|recipe-ocr\.mjs|recipe-placeholder\.svg|kitchen-background\.svg|ocr\/[a-z0-9.-]+)$/.test(name)) {
       return route.fulfill({status: 404, body: ''});
     }
     return route.fulfill({path: path.join(frontend, name),
@@ -38,11 +38,13 @@ const theme = `:root{--primary-color:#03a9f4;--text-primary-color:#fff;--card-ba
   await page.evaluate(() => customElements.define('ha-card', class extends HTMLElement {
     connectedCallback() { this.style.display = 'block'; }
   }));
-  await page.addScriptTag({path: path.join(frontend, 'essensplan-card.js')});
+  await page.addScriptTag({url: 'http://essensplan.test/essensplan_static/essensplan-card.js', type: 'module'});
+  await page.waitForFunction(() => customElements.get('essensplan-card'));
   await page.evaluate(fixture => {
     window.state = fixture.state;
     window.hass = {states: {}, callWS: async cmd => {
       if (cmd.type === 'essensplan/get') return structuredClone(state);
+      if (cmd.type === 'essensplan/ingredients') return {revision: state.revision, ingredient_list: fixture.ingredient_list};
       if (cmd.type === 'essensplan/nutrition_search') return cmd.queries.map(q => fixture.search[q] || []);
       if (cmd.type === 'essensplan/product_search') return fixture.products[cmd.query] || [];
       throw new Error('Im Bildskript nicht vorgesehen');

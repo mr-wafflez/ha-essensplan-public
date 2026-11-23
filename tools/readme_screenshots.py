@@ -82,16 +82,17 @@ def fixture():
             listed.append({'name': entry['name'], 'nutrition': {'code': first['code']}})
     change('set_ingredients', {'items': listed})
     snapshot = dict(state, meals_per_day=2, modules={'nutrition': True}, today=TODAY,
-                    nutrition={rid: nutrition.totals(r, state['ingredients']) for rid, r in state['recipes'].items()},
-                    ingredient_list=nutrition.ingredient_overview(state),
+                    nutrition={rid: nutrition.summary(nutrition.totals(r, state['ingredients']))
+                               for rid, r in state['recipes'].items()},
                     shopping=model.shopping(state, TODAY))
-    names = {entry['name'] for entry in snapshot['ingredient_list']}
+    ingredient_list = nutrition.ingredient_overview(state)
+    names = {entry['name'] for entry in ingredient_list}
     # Invented products; the real search asks Open Food Facts.
     products = {'Sahne': [
         {'barcode': '4000000000017', 'name': 'Schlagsahne 30 % · Beispielhof', 'quantity': '200 ml', 'kcal': 292},
         {'barcode': '4000000000024', 'name': 'Kochsahne 15 % · Musterland', 'quantity': '200 g', 'kcal': 164},
         {'barcode': '4000000000031', 'name': 'Bio-Sahne 32 % · Grünes Tal', 'quantity': '250 g', 'kcal': 307}]}
-    return {'state': snapshot, 'ids': ids, 'products': products,
+    return {'state': snapshot, 'ids': ids, 'products': products, 'ingredient_list': ingredient_list,
             'search': {name: nutrition.candidates(name, state['recipes'], state['ingredients']) for name in names}}
 
 

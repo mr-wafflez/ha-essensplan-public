@@ -16,7 +16,7 @@ from .const import CONF_MEALS_PER_DAY, CONF_NUTRITION_ENABLED, DEFAULT_MEALS_PER
 from .model import initial_state, mutate, normalize_state, shopping
 from .frontend import async_register_frontend, async_setup_frontend_entry, async_unload_frontend_entry
 from .sync import ShoppingSync
-from .nutrition import candidates, ingredient_overview, search_index, totals
+from .nutrition import candidates, ingredient_overview, search_index, summary, totals
 from .products import ProductLookup
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,8 +47,10 @@ class Planner:
         result['modules'] = {'nutrition': self.nutrition_enabled}
         if self.nutrition_enabled:
             ingredients = self.state.get('ingredients', {})
-            result['nutrition'] = {rid: totals(recipe, ingredients) for rid, recipe in self.state['recipes'].items()}
-            result['ingredient_list'] = ingredient_overview(self.state)
+            # Compact on purpose: every open card loads this snapshot. The ingredient
+            # list is fetched separately by the dialogs that need it.
+            result['nutrition'] = {rid: summary(totals(recipe, ingredients))
+                                   for rid, recipe in self.state['recipes'].items()}
         result['today'] = dt_util.now().date().isoformat()
         result['shopping'] = shopping(self.state, result['today'])
         return result
@@ -73,6 +75,8 @@ async def async_setup(hass, config):
     websocket_api.async_register_command(hass, ws_nutrition_search)
     websocket_api.async_register_command(hass, ws_barcode_lookup)
     websocket_api.async_register_command(hass, ws_product_search)
+    websocket_api.async_register_command(hass, ws_ingredients)
+    websocket_api.async_register_command(hass, ws_subscribe)
     async def sync_shopping_list(call):
         planner = hass.data.get(DOMAIN)
         if planner is None:
@@ -211,3 +215,33 @@ async def ws_product_search(hass, connection, msg):
         connection.send_error(msg['id'], 'search_failed', str(err))
     else:
         connection.send_result(msg['id'], products)
+
+
+@websocket_api.websocket_command({vol.Required('type'): 'essensplan/ingredients'})
+@websocket_api.async_response
+async def ws_ingredients(hass, connection, msg):
+    planner = hass.data.get(DOMAIN)
+    if planner is None or not planner.nutrition_enabled:
+        connection.send_error(msg['id'], 'not_enabled', 'Das Nährwertmodul ist deaktiviert')
+        return
+    state = planner.state
+    result = await hass.async_add_executor_job(ingredient_overview, state)
+    connection.send_result(msg['id'], {'revision': state['revision'], 'ingredient_list': result})
+
+
+@websocket_api.websocket_command({vol.Required('type'): 'essensplan/subscribe'})
+@callback
+def ws_subscribe(hass, connection, msg):
+    """Tell open cards about changes and the new day instead of letting them poll."""
+    planner = hass.data.get(DOMAIN)
+    if planner is None:
+        connection.send_error(msg['id'], 'not_loaded', 'Essensplan ist nicht geladen')
+        return
+
+    @callback
+    def forward():
+        connection.send_message(websocket_api.event_message(msg['id'], {
+            'revision': planner.state['revision'], 'today': dt_util.now().date().isoformat()}))
+
+    connection.subscriptions[msg['id']] = planner.subscribe(forward)
+    connection.send_result(msg['id'])

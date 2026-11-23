@@ -429,3 +429,13 @@ def ingredient_overview(state):
         })
     result.sort(key=lambda item: (-item['recipes'], item['name'].casefold()))
     return result
+
+
+def summary(result):
+    """Compact per-recipe totals for the card; the per-item list stays on the server."""
+    groups = {}
+    for item in result['items']:
+        if item['status'] not in ('ok', 'ignored'):
+            groups.setdefault(item['status'], []).append(item['name'])
+    # Unrounded: the card rounds for display, rounding twice would shift values.
+    return {'total': result['total'], 'portion': result['portion'], 'used': result['used'], 'open': groups}

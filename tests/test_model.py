@@ -162,6 +162,21 @@ class ModelTests(unittest.TestCase):
         result = nutrition.totals(self.state['recipes'][rid], self.state['ingredients'])
         self.assertEqual((result['total']['kcal'], result['items'][0]['source']), (140, 'list'))
 
+    def test_summary_keeps_only_open_ingredients(self):
+        rid = self.add(ingredient='Salz', quantity='', unit='')
+        self.change('save_recipe', {**self.state['recipes'][rid], 'ingredients': [
+            {'name': 'Salz', 'quantity': '', 'unit': ''}, {'name': 'Feta', 'quantity': '', 'unit': ''},
+            {'name': 'Rucola', 'quantity': '1', 'unit': 'bund'}, {'name': 'Gurke', 'quantity': '1', 'unit': 'stück'}]})
+        values = {'kcal': 100, 'protein': 1, 'carbs': 1, 'fat': 1}
+        self.change('set_ingredients', {'items': [{'name': n, 'nutrition': {'values': values}} for n in ('Feta', 'Rucola')]})
+        compact = nutrition.summary(nutrition.totals(self.state['recipes'][rid], self.state['ingredients']))
+        self.assertEqual(compact['open'], {'amount': ['Feta'], 'weight': ['Rucola'], 'mapping': ['Gurke']})
+        self.assertNotIn('items', compact)
+        # 24.46 g must stay 24 g on the card, not become 24.5 and then 25.
+        recipe = {'servings': '1', 'ingredients': [{'name': 'X', 'quantity': '24.46', 'unit': 'g',
+                                                     'nutrition': {'values': {'kcal': 100, 'protein': 0, 'carbs': 100, 'fat': 0}}}]}
+        self.assertAlmostEqual(nutrition.summary(nutrition.totals(recipe))['portion']['carbs'], 24.46)
+
     def test_default_weights_match_word_forms(self):
         self.assertEqual(nutrition.default_weights('rote Zwiebeln')['stück'], '80')
         self.assertEqual(nutrition.default_weights('Cherrytomaten')['stück'], '80')

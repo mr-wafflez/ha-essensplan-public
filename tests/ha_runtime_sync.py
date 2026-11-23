@@ -237,18 +237,18 @@ async def verify(component):
         form = await flow.async_step_init()
         assert form['type'] == 'form' and form['data_schema']({})['sync_enabled'] is True
         selected = await flow.async_step_init({'sync_enabled': True, 'sync_target': target_id})
-        assert selected['type'] == 'create_entry' and selected['data'] == {'sync_enabled': True, 'sync_target': target_id, 'meals_per_day': 1}
+        assert selected['type'] == 'create_entry' and selected['data'] == {'sync_enabled': True, 'sync_target': target_id, 'meals_per_day': 1, 'nutrition_enabled': False}
         rejected = await flow.async_step_init({'sync_enabled': True, 'sync_target': 'sensor.missing'})
         assert rejected['errors']['sync_target'] == 'unsupported_target'
         missing = await flow.async_step_init({'sync_enabled': True, 'sync_target': None})
         assert missing['errors']['sync_target'] == 'missing_target'
         disabled = await flow.async_step_init({'sync_enabled': False})
-        assert disabled['type'] == 'create_entry' and disabled['data'] == {'sync_enabled': False, 'sync_target': target_id, 'meals_per_day': 1}
+        assert disabled['type'] == 'create_entry' and disabled['data'] == {'sync_enabled': False, 'sync_target': target_id, 'meals_per_day': 1, 'nutrition_enabled': False}
         entry.options = disabled['data']
         disabled_form = await flow.async_step_init()
         assert disabled_form['data_schema']({})['sync_enabled'] is False
         reenabled = await flow.async_step_init({'sync_enabled': True})
-        assert reenabled['data'] == {'sync_enabled': True, 'sync_target': target_id, 'meals_per_day': 1}
+        assert reenabled['data'] == {'sync_enabled': True, 'sync_target': target_id, 'meals_per_day': 1, 'nutrition_enabled': False}
         hass.states.async_set(target_id, 'unavailable', {'supported_features': 0})
         paused_unavailable = await flow.async_step_init({'sync_enabled': False})
         assert paused_unavailable['data'] == disabled['data']
@@ -256,19 +256,19 @@ async def verify(component):
         assert enabled_unavailable['errors']['sync_target'] == 'unsupported_target'
         target.async_write_ha_state()
         cleared = await flow.async_step_init({'sync_enabled': False, 'sync_target': None})
-        assert cleared['data'] == {'sync_enabled': False, 'meals_per_day': 1}
+        assert cleared['data'] == {'sync_enabled': False, 'meals_per_day': 1, 'nutrition_enabled': False}
         entry.options = {}
         new_form = await flow.async_step_init()
         assert new_form['data_schema']({})['sync_enabled'] is False
         new_disabled = await flow.async_step_init({'sync_enabled': False})
-        assert new_disabled['data'] == {'sync_enabled': False, 'meals_per_day': 1}
+        assert new_disabled['data'] == {'sync_enabled': False, 'meals_per_day': 1, 'nutrition_enabled': False}
         assert new_form['data_schema']({})['meals_per_day'] == 1
         assert new_form['data_schema']({'meals_per_day': 6})['meals_per_day'] == 6
         for count in [0, 7, 1.5, True, '2', None, float('nan'), float('inf')]:
             invalid_count = await flow.async_step_init({'meals_per_day': count})
             assert invalid_count['errors']['meals_per_day'] == 'invalid_meals_per_day'
         chosen = await flow.async_step_init({'meals_per_day': 2.0})
-        assert chosen['data'] == {'sync_enabled': False, 'meals_per_day': 2}
+        assert chosen['data'] == {'sync_enabled': False, 'meals_per_day': 2, 'nutrition_enabled': False}
         assert type(chosen['data']['meals_per_day']) is int
         entry.options = {'sync_target': target_id, 'sync_enabled': True, 'meals_per_day': 3}
         retained_count = await flow.async_step_init({'sync_enabled': False})
