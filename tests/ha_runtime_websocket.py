@@ -36,10 +36,12 @@ async def verify(component):
     with tempfile.TemporaryDirectory(prefix='essensplan-ws-runtime-') as directory:
         hass = HomeAssistant(directory)
         for command in (integration.ws_get, integration.ws_change, integration.ws_ingredients,
-                        integration.ws_subscribe):
+                        integration.ws_subscribe, integration.ws_product_contribute):
             websocket_api.async_register_command(hass, command)
         planner = integration.Planner(hass, nutrition_enabled=True)
         hass.data[integration.DOMAIN] = planner
+        products = load(component, package.__name__ + '.products', 'products.py')
+        planner.products = products.ProductLookup(None)
         await planner.change('save_recipe', {'name': 'Linsensuppe', 'servings': 4, 'steps': ['Kochen.'],
             'ingredients': [{'name': 'rote Linsen', 'quantity': '250', 'unit': 'g'},
                             {'name': 'Zwiebel', 'quantity': '', 'unit': ''},
@@ -97,6 +99,15 @@ async def verify(component):
         connection.async_handle_close()
         assert not planner.listeners
 
+        # Contributing needs explicit consent and a configured account; nothing is sent otherwise.
+        connection = open_connection()
+        assert planner.snapshot()['modules']['contribute'] is False
+        package_data = {'barcode': '4000000000013', 'name': 'Test', 'values': {'kcal': 1, 'protein': 1, 'carbs': 1, 'fat': 1}}
+        [got] = await call(6, {'type': 'essensplan/product_contribute', 'consent': False, 'product': package_data})
+        assert not got['success'] and got['error']['code'] == 'invalid_format', got
+        [got] = await call(7, {'type': 'essensplan/product_contribute', 'consent': True, 'product': package_data})
+        assert not got['success'] and got['error']['code'] == 'contribute_failed' and 'Konto' in got['error']['message'], got
+
         # With the module off, the ingredient list is refused instead of computed.
         planner.nutrition_enabled = False
         connection = open_connection()
@@ -104,7 +115,8 @@ async def verify(component):
         assert not got['success'] and got['error']['code'] == 'not_enabled', got
         await hass.async_stop(force=True)
     print('PASS: real HA WebSocket connection, compact snapshot, ingredient list on request, '
-          'change events to subscribers, unsubscribe on close, disabled module refused')
+          'change events to subscribers, unsubscribe on close, contribution needs consent and account, '
+          'disabled module refused')
 
 
 if __name__ == '__main__':

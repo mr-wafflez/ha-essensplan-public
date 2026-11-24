@@ -5,10 +5,24 @@
       "init": {
         "title": "Essensplan konfigurieren",
         "description": "Wähle 1 bis 6 Gerichte pro Tag, jeweils mit eigenen Portionen. Bereits geplante Gerichte bleiben beim Verringern der Anzahl erhalten. Optional kannst du die Zutaten mit einer beschreibbaren HA-To-do-Liste synchronisieren und Häkchen in beide Richtungen abgleichen. Beim Ausschalten bleiben Zielliste und Einträge erhalten. Die Zielliste lässt sich in der iPhone-Companion-App mit Apple Erinnerungen koppeln.",
-        "data": {"nutrition_enabled": "Nährwertmodul aktivieren", "meals_per_day": "Gerichte pro Tag", "sync_enabled": "Einkaufsliste synchronisieren", "sync_target": "Ziel-Einkaufsliste"}
+        "data": {
+          "nutrition_enabled": "Nährwertmodul aktivieren",
+          "meals_per_day": "Gerichte pro Tag",
+          "sync_enabled": "Einkaufsliste synchronisieren",
+          "sync_target": "Ziel-Einkaufsliste",
+          "off_user": "Open-Food-Facts-Benutzername (zum Eintragen von Produkten)",
+          "off_password": "Open-Food-Facts-Passwort (leer lassen = unverändert)",
+          "off_staging": "Open-Food-Facts-Testserver verwenden"
+        }
       }
     },
-    "error": {"invalid_meals_per_day": "Wähle eine ganze Zahl von 1 bis 6.", "missing_target": "Wähle eine Ziel-Einkaufsliste, um die Synchronisation einzuschalten.", "unsupported_target": "Wähle eine andere To-do-Liste, die Hinzufügen, Ändern und Entfernen unterstützt. Die generierte Essensplan-Liste kann nicht ihr eigenes Ziel sein."}
+    "error": {
+      "invalid_meals_per_day": "Wähle eine ganze Zahl von 1 bis 6.",
+      "missing_target": "Wähle eine Ziel-Einkaufsliste, um die Synchronisation einzuschalten.",
+      "unsupported_target": "Wähle eine andere To-do-Liste, die Hinzufügen, Ändern und Entfernen unterstützt. Die generierte Essensplan-Liste kann nicht ihr eigenes Ziel sein.",
+      "off_user_not_email": "Bitte den Benutzernamen angeben, nicht die E-Mail-Adresse.",
+      "off_password_missing": "Bitte das Passwort des Open-Food-Facts-Kontos eingeben."
+    }
   },
   "config": {
     "step": {

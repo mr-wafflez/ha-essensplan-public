@@ -12,7 +12,8 @@ from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_MEALS_PER_DAY, CONF_NUTRITION_ENABLED, DEFAULT_MEALS_PER_DAY, DOMAIN, PLATFORMS
+from .const import (CONF_MEALS_PER_DAY, CONF_NUTRITION_ENABLED, CONF_OFF_PASSWORD, CONF_OFF_STAGING, CONF_OFF_USER,
+                    DEFAULT_MEALS_PER_DAY, DOMAIN, PLATFORMS)
 from .model import initial_state, mutate, normalize_state, shopping
 from .frontend import async_register_frontend, async_setup_frontend_entry, async_unload_frontend_entry
 from .sync import ShoppingSync
@@ -44,7 +45,10 @@ class Planner:
     def snapshot(self):
         result = deepcopy(self.state)
         result['meals_per_day'] = self.meals_per_day
-        result['modules'] = {'nutrition': self.nutrition_enabled}
+        products = getattr(self, 'products', None)
+        result['modules'] = {'nutrition': self.nutrition_enabled,
+                             'contribute': bool(self.nutrition_enabled and products and products.can_contribute),
+                             'contribute_test_server': bool(products and products.auth is not None)}
         if self.nutrition_enabled:
             ingredients = self.state.get('ingredients', {})
             # Compact on purpose: every open card loads this snapshot. The ingredient
@@ -76,6 +80,7 @@ async def async_setup(hass, config):
     websocket_api.async_register_command(hass, ws_barcode_lookup)
     websocket_api.async_register_command(hass, ws_product_search)
     websocket_api.async_register_command(hass, ws_ingredients)
+    websocket_api.async_register_command(hass, ws_product_contribute)
     websocket_api.async_register_command(hass, ws_subscribe)
     async def sync_shopping_list(call):
         planner = hass.data.get(DOMAIN)
@@ -95,7 +100,11 @@ async def async_setup_entry(hass, entry):
     )
     if planner.nutrition_enabled:
         await hass.async_add_executor_job(search_index)
-        planner.products = ProductLookup(async_get_clientsession(hass))
+        account = None
+        if entry.options.get(CONF_OFF_USER) and entry.options.get(CONF_OFF_PASSWORD):
+            account = (entry.options[CONF_OFF_USER], entry.options[CONF_OFF_PASSWORD])
+        planner.products = ProductLookup(async_get_clientsession(hass), account,
+                                         entry.options.get(CONF_OFF_STAGING, False))
     planner.state = normalize_state(await planner.store.async_load() or initial_state())
     planner.sync = ShoppingSync(hass, entry, planner)
     hass.data[DOMAIN] = planner
@@ -245,3 +254,23 @@ def ws_subscribe(hass, connection, msg):
 
     connection.subscriptions[msg['id']] = planner.subscribe(forward)
     connection.send_result(msg['id'])
+
+
+@websocket_api.websocket_command({
+    vol.Required('type'): 'essensplan/product_contribute',
+    vol.Required('product'): dict,
+    vol.Required('consent'): True,
+})
+@websocket_api.async_response
+async def ws_product_contribute(hass, connection, msg):
+    """Add a product or its missing nutrition facts to Open Food Facts (public, ODbL / CC BY-SA)."""
+    planner = hass.data.get(DOMAIN)
+    if planner is None or not planner.nutrition_enabled:
+        connection.send_error(msg['id'], 'not_enabled', 'Das Nährwertmodul ist deaktiviert')
+        return
+    try:
+        result = await planner.products.contribute(msg['product'])
+    except (ValueError, TypeError, AttributeError) as err:
+        connection.send_error(msg['id'], 'contribute_failed', str(err))
+    else:
+        connection.send_result(msg['id'], result)

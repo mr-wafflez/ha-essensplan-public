@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.17.0
+
+- **Bei Open Food Facts eintragen:** Findet das Nachschlagen eines Barcodes kein Produkt mit Nährwerten, kannst du Name, Marke, Packungsgröße und die vier Werte pro 100 g von der Packung eintragen, optional mit Foto der Nährwerttabelle. Das Produkt ist danach sofort ausgewählt.
+- Dafür ein eigenes Open-Food-Facts-Konto in den Integrationsoptionen hinterlegen (Benutzername, nicht E-Mail). Ohne Konto bleibt die Funktion ausgeblendet. Der Testserver von Open Food Facts ist wählbar.
+- Vorhandene Nährwerte und Produktnamen werden nicht überschrieben; Produkte mit Angaben pro Portion lehnt Essensplan ab. Eintragen erst nach ausdrücklicher Bestätigung.
+
 ## 0.16.1
 
 - Suche: „Zwiebel, rot“ und „Zwiebel rot“ finden wie „rote Zwiebel“ die Speisezwiebel statt „Weintraube rot“. Bei der Schreibweise mit Komma gilt der Teil davor als Hauptwort; Farb- und Eigenschaftswörter wie „rot“ oder „frisch“ suchen nicht mehr allein.

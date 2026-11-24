@@ -1,7 +1,7 @@
 {
   "domain": "essensplan",
   "name": "Essensplan",
-  "version": "0.16.1",
+  "version": "0.17.0",
   "config_flow": true,
   "integration_type": "service",
   "iot_class": "local_push",

@@ -1,5 +1,5 @@
 /* Nutrition module: ingredient list, search and scan, amounts table. Mixed into the card class. */
-import {esc, pretty} from './util.mjs?v=0.16.1';
+import {esc, pretty, prepareRecipeImage} from './util.mjs?v=0.17.0';
 
 export const nutritionMethods = {
   nutritionHTML(recipe, showTotal = false) {
@@ -116,6 +116,7 @@ export const nutritionMethods = {
           ${relevant.length?`<div class="weight-grid">${relevant.map(weightInput).join('')}</div>`:''}
           <details><summary>${relevant.length?'Weitere Einheiten':'Einheiten'}</summary><div class="weight-grid">${others.map(weightInput).join('')}</div></details>
         </fieldset>
+        <div class="contribute-box" hidden></div>
         <details data-more><summary>Weitere Optionen</summary>
           <div class="search-line"><label>Barcode-Nummer (EAN)<input data-barcode inputmode="numeric" maxlength="14"></label>
             <button type="button" data-lookup>Nachschlagen</button></div>
@@ -218,15 +219,80 @@ export const nutritionMethods = {
         return match;
       } catch(err) {
         feedback.textContent=`${err.message || 'Produktabruf fehlgeschlagen.'} Du kannst suchen oder unter „Weitere Optionen“ eigene Werte eingeben.`;
+        offerContribution(barcode);
         return null;
       }
+    };
+    // A scanned product that Open Food Facts lacks, or lacks values for, can be added from the packaging.
+    const contributeBox=panel.querySelector('.contribute-box');
+    const offerContribution=barcode=>{
+      if (!this.data.modules?.contribute || !/^\d{8,14}$/.test(barcode || '')) return;
+      const test=this.data.modules.contribute_test_server;
+      const field=(name,label,attrs='')=>`<label>${label}<input name="off-${name}" ${attrs}></label>`;
+      contributeBox.hidden=false;
+      contributeBox.innerHTML=`<p class="hint">Fehlt das Produkt oder fehlen Nährwerte? Trage die Angaben von der Packung ein${test?' (Testserver)':''}.</p>
+        <button type="button" data-contribute-open>Bei Open Food Facts eintragen</button>
+        <div data-contribute role="group" aria-label="Bei Open Food Facts eintragen" hidden>
+          ${field('barcode','Barcode',`value="${esc(barcode)}" readonly`)}
+          ${field('name','Produktname (wie auf der Packung)','aria-required="true" maxlength="200"')}
+          <div class="weight-grid">${field('brand','Marke','maxlength="100"')}${field('quantity','Packungsgröße, z. B. 500 g','maxlength="100"')}</div>
+          <div class="weight-grid">${fields.map(([k,l])=>field(k,`${l} pro 100 g`,'aria-required="true" inputmode="decimal"')).join('')}</div>
+          <label>Foto der Nährwerttabelle (empfohlen)<input type="file" name="off-photo" accept="image/*" capture="environment"></label>
+          <label class="check-line"><input type="checkbox" name="off-consent" aria-required="true"> Ich habe die Werte von der Packung übernommen. Sie werden öffentlich bei Open Food Facts gespeichert (Daten unter ODbL, Foto unter CC BY-SA).</label>
+          <p class="hint" role="status" data-contribute-status></p>
+          <div class="actions"><button type="button" class="primary" data-contribute-send>Eintragen</button><button type="button" data-contribute-cancel>Abbrechen</button></div>
+        </div>`;
+      // A div, not a form: the panel can sit inside the amounts dialog's form, and forms cannot nest.
+      const form=contributeBox.querySelector('[data-contribute]'), status=contributeBox.querySelector('[data-contribute-status]');
+      contributeBox.querySelector('[data-contribute-open]').onclick=()=>{
+        form.hidden=false; contributeBox.querySelector('[data-contribute-open]').hidden=true;
+        form.querySelector('[name=off-name]').focus();
+      };
+      contributeBox.querySelector('[data-contribute-cancel]').onclick=()=>{contributeBox.hidden=true;};
+      const submit=form.querySelector('[data-contribute-send]');
+      submit.onclick=async()=>{
+        const value=name=>form.querySelector(`[name=off-${name}]`).value.trim();
+        if (!value('name')) { status.textContent='Bitte den Produktnamen eintragen.'; return; }
+        if (!form.querySelector('[name=off-consent]').checked) {
+          status.textContent='Bitte bestätigen, dass die Werte von der Packung stammen und öffentlich gespeichert werden.'; return;
+        }
+        const values=Object.fromEntries(fields.map(([k])=>[k,value(k).replace(',','.')]));
+        if (Object.values(values).some(v=>v==='' || !Number.isFinite(Number(v)) || Number(v)<0)) {
+          status.textContent='Bitte alle vier Werte pro 100 g als Zahl eingeben.'; return;
+        }
+        submit.disabled=true;
+        try {
+          let image;
+          const file=form.querySelector('[name=off-photo]').files[0];
+          if (file) {
+            status.textContent='Foto wird vorbereitet …';
+            // Same checks and downscaling as recipe images: JPEG, at most 1600 px.
+            const blob=await prepareRecipeImage(file, 20);
+            const bytes=new Uint8Array(await blob.arrayBuffer());
+            let binary='';
+            for (let i=0;i<bytes.length;i+=0x8000) binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+            image=btoa(binary);
+          }
+          status.textContent='Wird bei Open Food Facts eingetragen …';
+          const match=await this._hass.callWS({type:'essensplan/product_contribute',consent:true,product:{
+            barcode:value('barcode'),name:value('name'),brand:value('brand'),quantity:value('quantity'),values,
+            ...(image?{image}:{})}});
+          remember(match.product.barcode,match,{scanned:true});
+          draw(); select(`p:${match.product.barcode}`);
+          contributeBox.hidden=true;
+          feedback.textContent=`Danke! ${match.product.name} ist bei Open Food Facts eingetragen${match.test_server?' (Testserver)':''}`+
+            (image?(match.photo?' – mit Foto.':' – das Foto konnte nicht hochgeladen werden.'):'.')+' Übernehmen nicht vergessen.';
+        } catch(err) {
+          status.textContent=err.message || 'Eintragen fehlgeschlagen.';
+        } finally { submit.disabled=false; }
+      };
     };
     // Choosing a product from the search loads its checked values right away.
     list.addEventListener('change',event=>{
       const value=event.target.value;
       if (value.startsWith('p:') && !matches.has(value.slice(2))) lookup(value.slice(2));
     });
-    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.16.1');
+    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.17.0');
     const scanBox=panel.querySelector('.scan-box'), video=scanBox.querySelector('video'), scan=panel.querySelector('[data-scan]');
     const photo=panel.querySelector('[data-photo-input]');
     const stopCamera=()=>{this._barcodeStop?.();this._barcodeStop=null;};

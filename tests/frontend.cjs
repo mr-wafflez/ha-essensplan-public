@@ -33,6 +33,9 @@ const assert = require('node:assert/strict');
    pushes.push({callback,message});return ()=>{pushes.splice(pushes.findIndex(p=>p.callback===callback),1);};}},
   callWS:async cmd=>{calls.push(cmd);
   if(cmd.type==='essensplan/ingredients') return {revision:state.revision,ingredient_list:structuredClone(state.ingredient_list||[])};
+  if(cmd.type==='essensplan/barcode_lookup' && cmd.barcode==='4000000000013') throw Error('Produkt nicht gefunden.');
+  if(cmd.type==='essensplan/product_contribute') return {product:{barcode:cmd.product.barcode,name:`${cmd.product.name} · ${cmd.product.brand}`,basis:'100g'},
+   values:cmd.product.values,photo:false,test_server:true};
   if(cmd.type==='essensplan/barcode_lookup') return {product:{barcode:cmd.barcode,name:'Testprodukt',basis:'100g'},
    values:{kcal:'539',protein:'6.3',carbs:'57.5',fat:'30.9'}};
   if(cmd.type==='essensplan/product_search') return [{barcode:'4056489116066',name:'Hackfleisch gemischt · Landjunker',quantity:'500 g',kcal:234}];
@@ -247,6 +250,35 @@ const assert = require('node:assert/strict');
  await nutritionDialog.locator('[data-close]').click();
  await nutritionDialog.waitFor({state:'detached'});
  await page.evaluate(()=>delete navigator.mediaDevices);
+ // A product Open Food Facts lacks can be entered from the packaging, but only with consent.
+ await page.evaluate(()=>{state.modules.contribute=true;state.modules.contribute_test_server=true;return card.load();});
+ await card.locator('[data-ingredients]').click();
+ const onion=nutritionDialog.locator('.ing-row[data-key="zwiebel"]');
+ await onion.locator('[data-edit]').click();
+ await onion.locator('[data-more] summary').click();
+ await onion.locator('[data-barcode]').fill('4000000000013');
+ await onion.locator('[data-lookup]').click();
+ await onion.getByText('Produkt nicht gefunden.',{exact:false}).waitFor();
+ await onion.locator('[data-contribute-open]').click();
+ const contribute=onion.locator('[data-contribute]');
+ assert.equal(await contribute.locator('[name=off-barcode]').inputValue(),'4000000000013');
+ await contribute.locator('[name=off-name]').fill('Rote Zwiebeln');
+ await contribute.locator('[name=off-brand]').fill('Beispielhof');
+ for(const [name,value] of [['kcal','40'],['protein','1,2'],['carbs','7.9'],['fat','0.2']]) await contribute.locator(`[name=off-${name}]`).fill(value);
+ await contribute.locator('[data-contribute-send]').click();
+ await contribute.getByText('Bitte bestätigen',{exact:false}).waitFor();
+ assert(!await page.evaluate(()=>calls.some(c=>c.type==='essensplan/product_contribute')));
+ await contribute.locator('[name=off-consent]').check();
+ await contribute.locator('[data-contribute-send]').click();
+ await onion.getByText('Danke! Rote Zwiebeln · Beispielhof ist bei Open Food Facts eingetragen (Testserver).',{exact:false}).waitFor();
+ const contributed=await page.evaluate(()=>calls.findLast(c=>c.type==='essensplan/product_contribute'));
+ assert.deepEqual(contributed,{type:'essensplan/product_contribute',consent:true,product:{barcode:'4000000000013',name:'Rote Zwiebeln',
+  brand:'Beispielhof',quantity:'',values:{kcal:'40',protein:'1.2',carbs:'7.9',fat:'0.2'}}});
+ assert(await onion.locator('input[type=radio][value="p:4000000000013"]').isChecked());
+ assert(await onion.locator('.contribute-box').isHidden());
+ await nutritionDialog.locator('[data-close]').click();
+ await nutritionDialog.waitFor({state:'detached'});
+ await page.evaluate(()=>{delete state.modules.contribute;delete state.modules.contribute_test_server;return card.load();});
  // Amounts table: typing keeps focus, a piece needs a weight, one save sends amounts and the list entry.
  await card.locator('[data-amounts="r1"]').click();
  const amountRows=nutritionDialog.locator('.amount-row');

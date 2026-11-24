@@ -89,9 +89,9 @@ def fixture():
     names = {entry['name'] for entry in ingredient_list}
     # Invented products; the real search asks Open Food Facts.
     products = {'Sahne': [
-        {'barcode': '4000000000017', 'name': 'Schlagsahne 30 % · Beispielhof', 'quantity': '200 ml', 'kcal': 292},
-        {'barcode': '4000000000024', 'name': 'Kochsahne 15 % · Musterland', 'quantity': '200 g', 'kcal': 164},
-        {'barcode': '4000000000031', 'name': 'Bio-Sahne 32 % · Grünes Tal', 'quantity': '250 g', 'kcal': 307}]}
+        {'barcode': '4000000000013', 'name': 'Schlagsahne 30 % · Beispielhof', 'quantity': '200 ml', 'kcal': 292},
+        {'barcode': '4000000000020', 'name': 'Kochsahne 15 % · Musterland', 'quantity': '200 g', 'kcal': 164},
+        {'barcode': '4000000000037', 'name': 'Bio-Sahne 32 % · Grünes Tal', 'quantity': '250 g', 'kcal': 307}]}
     return {'state': snapshot, 'ids': ids, 'products': products, 'ingredient_list': ingredient_list,
             'search': {name: nutrition.candidates(name, state['recipes'], state['ingredients']) for name in names}}
 
