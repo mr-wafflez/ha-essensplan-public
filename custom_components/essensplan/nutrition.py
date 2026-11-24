@@ -151,9 +151,21 @@ def _ranked(words, term):
     return [item[-1] for item in sorted(results)]
 
 
+# Describing words; on their own they would find "Weintraube rot" for "Zwiebel, rot".
+MODIFIERS = {'rot', 'rote', 'roter', 'rotes', 'gelb', 'gelbe', 'gelber', 'grun', 'grune', 'gruner', 'weiss', 'weisse',
+             'weisser', 'schwarz', 'schwarze', 'frisch', 'frische', 'frischer', 'frisches', 'klein', 'kleine', 'kleiner',
+             'gross', 'grosse', 'grosser', 'mager', 'magere', 'mageres', 'fein', 'feine', 'grob', 'grobe', 'gehackt',
+             'gehackte', 'gewurfelt', 'gerieben', 'geriebener', 'bio', 'tk', 'tiefgekuhlt', 'getrocknet', 'gemahlen'}
+
+
 def candidates(query, recipes, ingredients=None):
     original = key(query)
-    term = search_key(_NOISE.sub(' ', query))
+    cleaned = _NOISE.sub(' ', query)
+    if ',' in cleaned:
+        # "Zwiebel, rot" (catalog style) means "rote Zwiebel": the part before the comma is the noun.
+        head, *rest = [part for part in cleaned.split(',') if part.strip()] or ['']
+        cleaned = ' '.join([*rest, head])
+    term = search_key(cleaned)
     if not term:
         return []
     remembered = Counter(item['nutrition']['code'] for recipe in recipes.values()
@@ -163,11 +175,16 @@ def candidates(query, recipes, ingredients=None):
     if listed in catalog():
         remembered[listed] += 1000
     ordered = [code for code, _ in remembered.most_common()]
-    ordered += [codes_by_name()[name] for name in _aliases(term)]
+    # Among the preferred basic foods, the one naming a query word wins ("Paprika, gelb").
+    # Only describing words count; the noun itself ("Mais") must not reorder the list.
+    forms = {form for word in term.split()[:-1] for form in word_forms(word)}
+    aliases = sorted(_aliases(term), key=lambda name: -len(forms & set(search_key(name).split())))
+    ordered += [codes_by_name()[name] for name in aliases]
     words = term.split()
     found = _ranked(words, term)
     # "rote Zwiebel", "mageres Hackfleisch": fall back to the head noun, then to any word.
-    for fallback in ([words[-1]], *([word] for word in reversed(words[:-1]))):
+    nouns = [word for word in words if word not in MODIFIERS] or words
+    for fallback in ([nouns[-1]], *([word] for word in reversed(nouns[:-1]))):
         if found or len(words) == 1:
             break
         found = _ranked(fallback, fallback[0])

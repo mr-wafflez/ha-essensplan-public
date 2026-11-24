@@ -1,5 +1,5 @@
 /* Shopping list view and amounts for unmeasured ingredients. Mixed into the card class. */
-import {esc, offsetDay, monday, labelDate} from './util.mjs?v=0.16.0';
+import {esc, offsetDay, monday, labelDate} from './util.mjs?v=0.16.1';
 
 export const shoppingMethods = {
   shoppingHTML() {

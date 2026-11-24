@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.16.1
+
+- Suche: „Zwiebel, rot“ und „Zwiebel rot“ finden wie „rote Zwiebel“ die Speisezwiebel statt „Weintraube rot“. Bei der Schreibweise mit Komma gilt der Teil davor als Hauptwort; Farb- und Eigenschaftswörter wie „rot“ oder „frisch“ suchen nicht mehr allein.
+- Nennt die Suche eine Sorte, rückt der passende Vorschlag nach vorn, z. B. „Paprika, gelb“ → „Gemüsepaprika gelb, roh“ und „Tomaten, passiert“ → „Tomaten passiert/Tomatenpüree“.
+- `AGENTS.md` beschreibt die Arbeitsweise im Repository.
+
 ## 0.16.0
 
 - Schneller und sparsamer: Home Assistant meldet Änderungen und den Tageswechsel an die geöffneten Karten, statt dass jede Karte jede Minute den ganzen Datenstand abruft. Ein Abruf ist bei 82 Rezepten rund 82 KB statt 190 KB groß; die Zutatenliste lädt erst mit den Nährwert-Dialogen.

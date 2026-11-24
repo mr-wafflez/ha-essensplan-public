@@ -197,6 +197,14 @@ class ModelTests(unittest.TestCase):
                     'Ca. 400g Hähnchenbrust': 'Hähnchen Brust, ohne Haut, roh', 'Zucchini': 'Zucchini roh'}
         for query, name in expected.items():
             self.assertEqual(nutrition.candidates(query, {})[0]['name'], name, query)
+        for query in ('rote Zwiebel', 'Zwiebel, rot', 'Zwiebel rot', 'Zwiebeln, rote'):
+            names = [c['name'] for c in nutrition.candidates(query, {})[:4]]
+            self.assertEqual(names[0], 'Speisezwiebel roh', query)
+            self.assertFalse([n for n in names if 'Weintraube' in n or 'Johannisbeere' in n], (query, names))
+        self.assertEqual(nutrition.candidates('Hähnchen, Brust', {})[0]['name'], 'Hähnchen Brust, ohne Haut, roh')
+        self.assertEqual(nutrition.candidates('Paprika, gelb', {})[0]['name'], 'Gemüsepaprika gelb, roh')
+        self.assertEqual(nutrition.candidates('gelbe Paprika', {})[0]['name'], 'Gemüsepaprika gelb, roh')
+        self.assertEqual(nutrition.candidates('Tomaten, passiert', {})[0]['name'], 'Tomaten passiert/Tomatenpüree')
         unresolved = [name for names in nutrition.ALIASES.values() for name in names
                       if name not in nutrition.codes_by_name()]
         self.assertEqual(unresolved, [])

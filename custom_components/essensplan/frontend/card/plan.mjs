@@ -1,5 +1,5 @@
 /* Today, week plan, slot actions and recipe detail. Mixed into the card class. */
-import {esc, offsetDay, labelDate, pretty} from './util.mjs?v=0.16.0';
+import {esc, offsetDay, labelDate, pretty} from './util.mjs?v=0.16.1';
 
 export const planMethods = {
   todayHTML() {

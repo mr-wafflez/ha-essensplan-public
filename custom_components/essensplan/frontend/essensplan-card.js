@@ -1,10 +1,10 @@
-/* Essensplan 0.16.0 – bundled with the integration; no CDN or build step. */
-import {esc, offsetDay, monday} from './card/util.mjs?v=0.16.0';
-import {CARD_STYLES} from './card/styles.mjs?v=0.16.0';
-import {planMethods} from './card/plan.mjs?v=0.16.0';
-import {recipesMethods} from './card/recipes.mjs?v=0.16.0';
-import {nutritionMethods} from './card/nutrition.mjs?v=0.16.0';
-import {shoppingMethods} from './card/shopping.mjs?v=0.16.0';
+/* Essensplan 0.16.1 – bundled with the integration; no CDN or build step. */
+import {esc, offsetDay, monday} from './card/util.mjs?v=0.16.1';
+import {CARD_STYLES} from './card/styles.mjs?v=0.16.1';
+import {planMethods} from './card/plan.mjs?v=0.16.1';
+import {recipesMethods} from './card/recipes.mjs?v=0.16.1';
+import {nutritionMethods} from './card/nutrition.mjs?v=0.16.1';
+import {shoppingMethods} from './card/shopping.mjs?v=0.16.1';
 
 class EssensplanCard extends HTMLElement {
   constructor() {
