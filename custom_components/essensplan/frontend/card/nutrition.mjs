@@ -1,5 +1,5 @@
 /* Nutrition module: ingredient list, search and scan, amounts table. Mixed into the card class. */
-import {esc, pretty} from './util.mjs?v=0.16.0';
+import {esc, pretty} from './util.mjs?v=0.16.1';
 
 export const nutritionMethods = {
   nutritionHTML(recipe, showTotal = false) {
@@ -226,7 +226,7 @@ export const nutritionMethods = {
       const value=event.target.value;
       if (value.startsWith('p:') && !matches.has(value.slice(2))) lookup(value.slice(2));
     });
-    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.16.0');
+    const scanner=()=>import('/essensplan_static/barcode/scanner.mjs?v=0.16.1');
     const scanBox=panel.querySelector('.scan-box'), video=scanBox.querySelector('video'), scan=panel.querySelector('[data-scan]');
     const photo=panel.querySelector('[data-photo-input]');
     const stopCamera=()=>{this._barcodeStop?.();this._barcodeStop=null;};

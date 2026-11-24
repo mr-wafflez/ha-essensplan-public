@@ -1,5 +1,5 @@
 /* Recipe cards, recipe dialogs, images, screenshot import and the editor. Mixed into the card class. */
-import {esc, offsetDay, monday, labelDate, pretty, prepareRecipeImage} from './util.mjs?v=0.16.0';
+import {esc, offsetDay, monday, labelDate, pretty, prepareRecipeImage} from './util.mjs?v=0.16.1';
 
 export const recipesMethods = {
   recipeImage(r) {
@@ -342,7 +342,7 @@ export const recipesMethods = {
         choose.disabled=true;
         status.textContent='Screenshots werden lokal gelesen …';
         try {
-          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.16.0');
+          ocr=await import('/essensplan_static/recipe-ocr.mjs?v=0.16.1');
           const result=await ocr.recognizeRecipe(selected,(page,progress)=>{
             if (active()) status.textContent=`Bild ${page} von ${selected.length} wird lokal gelesen … ${progress} %`;
           },controller.signal);
