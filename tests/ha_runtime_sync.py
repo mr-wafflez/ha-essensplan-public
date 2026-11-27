@@ -273,6 +273,24 @@ async def verify(component):
         entry.options = {'sync_target': target_id, 'sync_enabled': True, 'meals_per_day': 3}
         retained_count = await flow.async_step_init({'sync_enabled': False})
         assert retained_count['data']['meals_per_day'] == 3 and retained_count['data']['sync_target'] == target_id
+        # Open Food Facts account: user name, not email; an empty password keeps the stored one.
+        form = await flow.async_step_init()
+        schema_keys = {str(key) for key in form['data_schema'].schema}
+        assert {'off_user', 'off_password', 'off_staging'} <= schema_keys, schema_keys
+        account = await flow.async_step_init({'sync_enabled': False, 'off_user': ' haushalt ', 'off_password': 'geheim',
+                                              'off_staging': True})
+        assert (account['data']['off_user'], account['data']['off_password'], account['data']['off_staging']) == \
+            ('haushalt', 'geheim', True)
+        entry.options = account['data']
+        kept = await flow.async_step_init({'sync_enabled': False, 'off_user': 'haushalt', 'off_password': ''})
+        assert kept['data']['off_password'] == 'geheim' and 'off_staging' not in kept['data'] or kept['data']['off_staging']
+        email = await flow.async_step_init({'sync_enabled': False, 'off_user': 'ich@example.org', 'off_password': 'x'})
+        assert email['errors']['off_user'] == 'off_user_not_email'
+        removed = await flow.async_step_init({'sync_enabled': False, 'off_user': ''})
+        assert not {'off_user', 'off_password', 'off_staging'} & set(removed['data'])
+        entry.options = {}
+        missing = await flow.async_step_init({'sync_enabled': False, 'off_user': 'haushalt'})
+        assert missing['errors']['off_password'] == 'off_password_missing'
         await target.async_remove()
         await hass.async_block_till_done()
         print('PASS: real HA todo services, sync checks and failures; multiple dishes, combined ingredient export, storage/reload, sensor slots, failed save atomicity, stale revisions, real number options selector and validation, retained count/target and sync toggle behavior')

@@ -15,7 +15,7 @@ Eine lokale Custom Integration mit eigener Dashboard-Karte. Kein zusätzlicher S
 - Gleichzeitiges Bearbeiten wird durch Revisionen geprüft; fehlgeschlagenes Speichern veröffentlicht keine ungesicherten Änderungen.
 - Mealprep: einmal kochen, Reste an anderen Tagen einplanen, Gerichte als gekocht abhaken.
 - Rezepte aus bis zu drei Screenshots importieren; die Texterkennung läuft lokal.
-- Optionales Nährwertmodul: Kalorien und Makros pro Portion, Zuordnung einmal pro Zutat für alle Rezepte, eine Suche für Lebensmittel (Bundeslebensmittelschlüssel) und Supermarktprodukte, Barcode-Scan.
+- Optionales Nährwertmodul: Kalorien und Makros pro Portion, Zuordnung einmal pro Zutat für alle Rezepte, eine Suche für Lebensmittel (Bundeslebensmittelschlüssel) und Supermarktprodukte, Barcode-Scan, fehlende Produkte bei Open Food Facts eintragen.
 
 Die Integration enthält ihre Dashboard-Karte bereits. Bei einer neuen Einrichtung steht der vollständige Plan direkt als **Essensplan** in der Seitenleiste bereit. Vorhandene Essensplan-Dashboards werden weiterverwendet.
 
@@ -70,6 +70,29 @@ Unter **Ändern** gibt es ein Suchfeld mit **Suchen** und daneben **Scannen**:
   Fotoaufnahme bzw. Bildauswahl.
 - Unter **Weitere Optionen** kannst du eine Barcode-Nummer von Hand eingeben
   oder eigene Werte pro 100 g eintragen.
+
+### Fehlende Produkte bei Open Food Facts eintragen
+
+Viele Produkte, besonders unverarbeitetes Gemüse wie rote Zwiebeln, stehen bei
+Open Food Facts ohne Nährwerte. Findet das Nachschlagen eines Barcodes nichts
+Brauchbares, erscheint **Bei Open Food Facts eintragen**:
+
+1. Produktname, Marke und Packungsgröße von der Packung übernehmen.
+2. Kalorien, Eiweiß, Kohlenhydrate und Fett **pro 100 g** eintragen.
+3. Optional ein Foto der Nährwerttabelle aufnehmen (wird wie Rezeptbilder auf
+   höchstens 1600 px verkleinert).
+4. Bestätigen, dass die Werte von der Packung stammen, und **Eintragen**.
+
+Das Produkt ist danach sofort ausgewählt. Voraussetzung ist ein eigenes, kostenloses
+Konto bei Open Food Facts, eingetragen unter **Einstellungen → Geräte & Dienste →
+Essensplan → Konfigurieren** (Benutzername, nicht die E-Mail-Adresse). Das Passwort
+liegt wie andere Zugangsdaten von Integrationen in der HA-Konfiguration. Zum
+Ausprobieren gibt es die Option **Testserver**; er braucht ein eigenes Konto auf
+`world.openfoodfacts.net`. Ohne Konto ist die Funktion ausgeblendet.
+
+Essensplan überschreibt keine vorhandenen Nährwerte und keinen vorhandenen
+Produktnamen. Produkte, deren Angaben pro Portion erfasst sind, lehnt es ab.
+Eingetragene Daten stehen öffentlich unter ODbL, Fotos unter CC BY-SA.
 
 Prüfe die Werte eines Produkts, die Daten stammen von der Community. Essensplan
 unterstützt Angaben pro 100 g und pro 100 ml. Bestätigte Produkte werden lokal
@@ -339,7 +362,7 @@ Der Tagesgericht-Sensor heißt normalerweise `sensor.essensplan_heute`. Sein Zus
 
 Rezepte, Plan und Einkaufsstatus liegen im HA-Konfigurationsordner unter `.storage/essensplan`. Vollständige HA-Backups mit dem Konfigurationsordner verwenden. Die Datei nicht im laufenden Betrieb von Hand bearbeiten. Ein Entfernen und erneutes Hinzufügen der Integration löscht die Rezeptdatei nicht absichtlich.
 
-Alle angemeldeten HA-Nutzer können diese gemeinsame Haushaltssammlung über die API lesen und bearbeiten. Eine ausgeblendete Dashboard-Schaltfläche ist keine Berechtigungssperre. Keine eigenen Tokens, externen Benutzerkonten oder externen Rezeptdienste erforderlich.
+Alle angemeldeten HA-Nutzer können diese gemeinsame Haushaltssammlung über die API lesen und bearbeiten. Eine ausgeblendete Dashboard-Schaltfläche ist keine Berechtigungssperre. Keine eigenen Tokens, externen Benutzerkonten oder externen Rezeptdienste erforderlich; nur das Eintragen bei Open Food Facts nutzt optional ein eigenes Konto dort.
 
 Die Karte lädt Daten über die angemeldete HA-WebSocket-Verbindung. Home Assistant meldet jede Änderung und den Tageswechsel an alle geöffneten Karten, die dann neu laden; ein Abruf alle zehn Minuten dient nur als Rückfall. Die umfangreiche Zutatenliste des Nährwertmoduls wird erst geladen, wenn ein Nährwert-Dialog geöffnet wird. Während der Rezeptbearbeitung wird der ungespeicherte Text nicht durch Hintergrundabrufe ersetzt; ein inzwischen geänderter Datenstand verhindert das Überschreiben beim Speichern. Dann abbrechen, Daten neu öffnen und Änderungen übernehmen.
 

@@ -78,7 +78,7 @@ export const CARD_STYLES = `
       ha-card{
         color:var(--ep-text);border-radius:26px;border:1px solid var(--ep-edge);
         background:var(--ep-surface);
-        background-image:url("/essensplan_static/kitchen-background.svg?v=0.16.1"),
+        background-image:url("/essensplan_static/kitchen-background.svg?v=0.17.0"),
           radial-gradient(ellipse at top left,#d9a47524,transparent 68%);
         background-size:min(100%,640px) auto,100% 360px;
         background-position:top right,top left;background-repeat:no-repeat;
@@ -109,7 +109,7 @@ export const CARD_STYLES = `
       dialog{box-shadow:0 16px 54px #0005,inset 0 1px 0 var(--ep-glint)}
       @supports (color:color-mix(in srgb,white,black)){
         ha-card{
-          background-image:url("/essensplan_static/kitchen-background.svg?v=0.16.1"),
+          background-image:url("/essensplan_static/kitchen-background.svg?v=0.17.0"),
             radial-gradient(ellipse at 2% 0%,color-mix(in srgb,#e6ad7d 20%,transparent),transparent 63%),
             radial-gradient(ellipse at 96% 16%,color-mix(in srgb,#9baa7f 18%,transparent),transparent 65%),
             radial-gradient(ellipse at 5% 100%,color-mix(in srgb,var(--ep-accent) 12%,transparent),transparent 66%);

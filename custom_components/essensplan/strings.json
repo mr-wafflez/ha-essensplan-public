@@ -5,10 +5,24 @@
       "init": {
         "title": "Configure meal planner",
         "description": "Choose 1 to 6 dishes per day, each with its own servings. Reducing the count keeps existing meals. Optionally sync ingredients and check marks both ways with a writable Home Assistant to-do list. Turning sync off keeps the selected target and existing items. Pair the target list with Apple Reminders in the iPhone Companion app.",
-        "data": {"nutrition_enabled": "Enable nutrition module", "meals_per_day": "Dishes per day", "sync_enabled": "Sync shopping list", "sync_target": "Target shopping list"}
+        "data": {
+          "nutrition_enabled": "Enable nutrition module",
+          "meals_per_day": "Dishes per day",
+          "sync_enabled": "Sync shopping list",
+          "sync_target": "Target shopping list",
+          "off_user": "Open Food Facts user name (to contribute products)",
+          "off_password": "Open Food Facts password (leave empty to keep)",
+          "off_staging": "Use the Open Food Facts test server"
+        }
       }
     },
-    "error": {"invalid_meals_per_day": "Choose a whole number from 1 to 6.", "missing_target": "Select a target shopping list to enable sync.", "unsupported_target": "Select another to-do list that supports adding, updating and deleting items. The generated Meal Planner list cannot be used as its own target."}
+    "error": {
+      "invalid_meals_per_day": "Choose a whole number from 1 to 6.",
+      "missing_target": "Select a target shopping list to enable sync.",
+      "unsupported_target": "Select another to-do list that supports adding, updating and deleting items. The generated Meal Planner list cannot be used as its own target.",
+      "off_user_not_email": "Enter the user name, not the email address.",
+      "off_password_missing": "Enter the password of the Open Food Facts account."
+    }
   },
   "config": {
     "step": {
